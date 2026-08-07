@@ -14,7 +14,9 @@
 
 Every task's requirements implicitly include this section.
 
-- **Deployment target: iOS 17.0** on all three targets. `UIPasteControl` requires iOS 16+; 17.0 gives headroom.
+- **Toolchain: Xcode 26.6, Swift 6.3.3, iOS 26.5 SDK.** Verified on this machine.
+- **Swift Language Version must be set to 5 on all three targets.** Xcode 26 defaults new projects to Swift 6 language mode, whose strict concurrency checking would reject this code without several `Sendable` annotations. The app's concurrency is trivial — one download batch at a time, all UI on the main actor — so Swift 6 mode buys close to nothing here while generating diagnostics that obscure real errors. Task 1 Step 4 sets this. It is a build setting, reversible at any time.
+- **Deployment target: iOS 17.0** on all three targets. `UIPasteControl` requires iOS 16+; 17.0 gives headroom and is well within what Xcode 26 supports.
 - **No App Groups entitlement may appear in any target.** It fails to provision on a free Personal Team and the build will not compile. Do not add it, even speculatively.
 - **No third-party dependencies.** No SPM packages, no CocoaPods.
 - **`MSSticker` limits:** file ≤ 500,000 bytes; both dimensions between 100 and 618 inclusive.
@@ -120,8 +122,8 @@ This is GUI work. Xcode's templates generate `project.pbxproj` correctly; hand-a
 In Xcode: `File → New → Project… → iOS → App`.
 
 - Product Name: `DiscordStickers`
-- Interface: **Storyboard**
 - Language: **Swift**
+- Interface: choose **Storyboard** if offered. Xcode 26 may offer only **SwiftUI** — that is fine, and Task 10 provides both variants of the host-app screen. Record which one you got; Task 10 needs to know.
 - Uncheck "Use Core Data", uncheck "Include Tests"
 - Save into `/Users/jonathan/Projects/discord stickers for iphone/`
 - When prompted about source control, **uncheck** "Create Git repository" — the repo already exists.
@@ -132,7 +134,9 @@ Select the project in the navigator → `DiscordStickers` target → General →
 
 - [ ] **Step 3: Add the iMessage extension target**
 
-`File → New → Target… → iOS → iMessage Extension`.
+`File → New → Target… → iOS → iMessage Extension`. In Xcode 26 this sits under the **Application Extension** heading; use the template chooser's search field if it isn't visible.
+
+Do **not** pick "Sticker Pack Extension" — that template ships a fixed folder of images with no code, which is the opposite of what this app does.
 
 - Product Name: `DiscordStickersMessages`
 - Embed in Application: `DiscordStickers`
@@ -140,7 +144,15 @@ Select the project in the navigator → `DiscordStickers` target → General →
 
 Set its Minimum Deployments to iOS 17.0 as well.
 
-- [ ] **Step 4: Add the StickerKit framework target**
+- [ ] **Step 4: Set Swift Language Version to 5 on every target**
+
+Select the **project** (not a target) in the navigator → Build Settings → search for `Swift Language Version` → set it to **Swift 5**. Then check each of the three targets and clear any target-level override so all inherit the project setting.
+
+Xcode 26 defaults to Swift 6 language mode. Under it, `StickerStore` being handed to a task group and `EmojiDownloader` capturing `self` across an `await` are both hard errors until the types carry `Sendable` conformances. The app's threading is genuinely simple, so the checking earns little here and its diagnostics would bury the errors that matter. Flipping back to Swift 6 later is this same setting.
+
+Verify: Build (⌘B) and confirm no `Sendable`-related errors appear.
+
+- [ ] **Step 5: Add the StickerKit framework target**
 
 `File → New → Target… → iOS → Framework`.
 
@@ -148,42 +160,43 @@ Set its Minimum Deployments to iOS 17.0 as well.
 - Embed in Application: `DiscordStickers`
 - Minimum Deployments: iOS 17.0
 
-- [ ] **Step 5: Link StickerKit into the extension**
+- [ ] **Step 6: Link StickerKit into the extension**
 
 Select the `DiscordStickersMessages` target → General → **Frameworks and Libraries** → `+` → `StickerKit.framework` → set to **Do Not Embed**.
 
-The framework is embedded once by the app (Xcode did this in Step 4) and merely linked by the extension. Embedding it twice produces a duplicate-bundle error at launch.
+The framework is embedded once by the app (Xcode did this in Step 5) and merely linked by the extension. Embedding it twice produces a duplicate-bundle error at launch.
 
-- [ ] **Step 6: Add the unit test target**
+- [ ] **Step 7: Add the unit test target**
 
 `File → New → Target… → iOS → Unit Testing Bundle`.
 
 - Product Name: `StickerKitTests`
 - Target to be Tested: `StickerKit`
+- Testing System: **XCTest** (not Swift Testing — every test in this plan is written as `XCTestCase`).
 
-- [ ] **Step 7: Confirm no App Groups entitlement exists anywhere**
+- [ ] **Step 8: Confirm no App Groups entitlement exists anywhere**
 
 For each of the three targets, open Signing & Capabilities. Confirm **App Groups is not listed**. If Xcode added an entitlements file, open it and confirm it contains no `com.apple.security.application-groups` key.
 
-- [ ] **Step 8: Set signing to the Personal Team**
+- [ ] **Step 9: Set signing to the Personal Team**
 
 For each of the three targets: Signing & Capabilities → check "Automatically manage signing" → Team → your personal Apple ID.
 
-- [ ] **Step 9: Verify the whole thing builds**
+- [ ] **Step 10: Verify the whole thing builds**
 
 Product → Build (⌘B).
 
 Expected: build succeeds with no errors.
 
-- [ ] **Step 10: Find your simulator name for later tasks**
+- [ ] **Step 11: Find your simulator name for later tasks**
 
 ```bash
 xcrun simctl list devices available | grep -i iphone
 ```
 
-Record one name (for example `iPhone 16`). Every `xcodebuild test` command below writes `NAME` — substitute this value.
+Record one name exactly as printed (for example `iPhone 17 Pro`). Every `xcodebuild` command below writes `NAME` — substitute this value. If nothing lists, the iOS 26.5 simulator runtime is still downloading; wait for it to finish.
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
 git add -A
@@ -744,7 +757,13 @@ import Foundation
 /// `root` is injected rather than derived internally so that tests can point
 /// it at a temp directory, and so that moving to a shared App Group container
 /// on a paid account is a change to one argument.
-public final class StickerStore {
+///
+/// `@unchecked Sendable` is honest here rather than a shortcut: every access
+/// to `entries` and `pendingWrite` goes through `queue`, which is serial. The
+/// compiler cannot see that invariant, but it is the class's central design
+/// fact. If you ever add a property touched outside `queue`, this conformance
+/// becomes a lie — so don't.
+public final class StickerStore: @unchecked Sendable {
 
     private let root: URL
     private let imagesDirectory: URL
@@ -1200,7 +1219,11 @@ import Messages
 /// Nothing here throws to the caller: every failure is recorded in the
 /// returned `DownloadOutcome`, because a partial batch is the expected case
 /// rather than an exceptional one.
-public final class EmojiDownloader {
+///
+/// `Sendable` holds without qualification: both stored properties are
+/// immutable, `URLSession` is `Sendable`, and `StickerStore` vouches for
+/// itself through queue confinement.
+public final class EmojiDownloader: Sendable {
 
     private let store: StickerStore
     private let session: URLSession
@@ -2108,15 +2131,17 @@ git commit -m "feat: wire grid, search, tabs, and paste into the Messages extens
 ### Task 10: Host app shell
 
 **Files:**
-- Modify: `DiscordStickers/ViewController.swift` (replace template contents)
+- Modify: `DiscordStickers/ViewController.swift` **or** `DiscordStickers/ContentView.swift`, depending on which interface the Task 1 Step 1 template produced.
 
 **Interfaces:**
 - Consumes: nothing from `StickerKit`. Intentionally inert in v1.
 - Produces: a screen explaining how to reach the extension.
 
-- [ ] **Step 1: Replace the template view controller**
+Do Step 1a **or** Step 1b, not both. Check which file exists in the `DiscordStickers` group.
 
-Replace the entire contents of `DiscordStickers/ViewController.swift`:
+- [ ] **Step 1a: Storyboard variant — replace `DiscordStickers/ViewController.swift`**
+
+Skip to Step 1b if your project has `ContentView.swift` instead.
 
 ```swift
 import UIKit
@@ -2170,6 +2195,48 @@ final class ViewController: UIViewController {
 }
 ```
 
+- [ ] **Step 1b: SwiftUI variant — replace `DiscordStickers/ContentView.swift`**
+
+Skip this if you already did Step 1a.
+
+```swift
+import SwiftUI
+
+/// Deliberately inert. An iMessage extension cannot ship on its own, so this
+/// app exists to carry one. Everything real happens inside the extension,
+/// because App Groups — which would let this app write storage the extension
+/// could read — is unavailable on a free Personal Team.
+struct ContentView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Discord Stickers")
+                .font(.largeTitle)
+
+            Text("""
+            Everything happens inside Messages.
+
+            1. Open any conversation in Messages.
+            2. Tap the apps row beside the text field, then pick \
+            Discord Stickers.
+            3. Drag the drawer up to reveal search and the paste button.
+
+            To add emoji: in Discord, tap emoji into a message box, select \
+            all, and copy. Then paste them into the drawer.
+
+            Tap a sticker to send it, or drag it onto a message to stick \
+            it there.
+            """)
+            .font(.body)
+        }
+        .padding(24)
+    }
+}
+
+#Preview {
+    ContentView()
+}
+```
+
 - [ ] **Step 2: Build and verify**
 
 ```bash
@@ -2182,7 +2249,7 @@ Expected: `BUILD SUCCEEDED`.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add DiscordStickers/ViewController.swift
+git add DiscordStickers/
 git commit -m "feat: add host app shell explaining how to reach the extension"
 ```
 
