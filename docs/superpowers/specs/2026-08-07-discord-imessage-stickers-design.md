@@ -25,7 +25,7 @@ Static images only. Animated Discord emoji are supported as sources, but are sto
 
 These shape every decision below. Losing track of one invalidates the design.
 
-1. **Free Apple ID (Personal Team), no paid Developer membership.** Consequently **App Groups is unavailable** — the host app and the Messages extension cannot share a container. Any design relying on a shared container will fail to build.
+1. **Free Apple ID (Personal Team), no paid Developer membership.** Consequently **App Groups is unavailable** — the host app and the Messages extension cannot share a container. This fails at *provisioning time*, not runtime: a target declaring the capability under a Personal Team will not build at all (*"Personal development teams do not support the App Groups capability"*). There is therefore no way to trial a shared-container design before paying.
 
 2. **The app expires every 7 days** and must be re-run from Xcode with the iPhone connected or on the same Wi-Fi. A reinstall wipes the extension's `Documents/` directory, so re-syncing must be cheap and idempotent.
 
@@ -47,16 +47,29 @@ These shape every decision below. Losing track of one invalidates the design.
 
 | Target | Role |
 |---|---|
-| `DiscordStickers` (iOS app) | Thin shell. One screen of setup instructions. Exists only because an iMessage extension cannot ship alone. |
-| `DiscordStickersMessages` (iMessage extension) | Everything — browsing, search, pasting, downloading, storage. |
+| `StickerKit` (framework) | All logic and reusable UI — parser, store, downloader, grid, paste view controller. Linked by both targets below. |
+| `DiscordStickers` (iOS app) | Thin shell in v1. One screen of setup instructions. Exists only because an iMessage extension cannot ship alone. |
+| `DiscordStickersMessages` (iMessage extension) | Hosts the `StickerKit` UI. In v1 it owns everything — browsing, search, pasting, downloading, storage. |
 
-The lopsided split is forced by §2 constraint 1: the extension cannot read what the host app wrote, so the extension owns its world end to end. **The paste UI therefore lives inside the extension's expanded mode**, not in the host app.
+The lopsided split is forced by §2 constraint 1: the extension cannot read what the host app wrote, so in v1 the extension owns its world end to end. **The paste UI therefore lives inside the extension's expanded mode**, not in the host app.
 
-**Structured for a paid tier later.** `StickerStore` receives its storage root as an injected dependency rather than reaching for `FileManager.default.urls(for: .documentDirectory, …)` internally. If a paid account is ever obtained, migrating to a shared App Group container is a changed initializer argument plus new host-app UI, not a rewrite. This same injection is what makes `StickerStore` testable against a temp directory (§8).
+### Designed so the paid-tier flip is cheap
+
+The governing distinction: **App Groups shares *data* between targets at runtime and is unavailable on a free Personal Team. A shared framework shares *code* between targets at compile time and is not restricted.** A build that declares the App Groups capability under a Personal Team fails to provision entirely — there is no 7-day trial of that architecture — so v1 must be genuinely free-tier-native, not a paid design running in degraded mode.
+
+Three seams make the later upgrade an evening rather than a rewrite:
+
+1. **`StickerKit` is a real framework target**, not source files pasted into the extension. Both targets link it. Free-tier legal, and it also makes the logic testable outside an app extension (§8).
+2. **`StickerStore` takes its storage root as an initializer parameter**, never reaching for `FileManager.default.urls(for: .documentDirectory, …)` internally. The free build passes the extension's own `Documents/`; a paid build passes the shared container URL. This same injection is what allows testing against a temp directory.
+3. **The paste flow is a self-contained view controller** in `StickerKit`, not logic welded into the extension's drawer controller. The free build presents it inside expanded mode; a paid build presents the same class full-screen from the host app.
+
+The upgrade path is then: obtain the membership, enable App Groups on both targets, change one URL, and add a host-app screen presenting a view controller that already exists. §9 (reinstall persistence) becomes unnecessary at that point, since the 7-day expiry extends to a year.
+
+None of these three costs anything today — the view controller must live somewhere regardless, and the store needs a path regardless. The design simply declines to hardcode the two facts known to be changeable.
 
 ### Units
 
-Four units inside the extension, each independently understandable and — except the last — independently testable without a device.
+Five units inside `StickerKit`, each independently understandable and — except the last two — independently testable without a device.
 
 - **`EmojiMarkupParser`** — pure function, no I/O. String in, `[ParsedEmoji]` out. Regex `<(a)?:([A-Za-z0-9_]+):(\d+)>`, deduped by ID within the batch.
 
@@ -65,6 +78,8 @@ Four units inside the extension, each independently understandable and — excep
 - **`EmojiDownloader`** — `[ParsedEmoji]` → concurrent fetch (cap ~5) → validate → hand files to `StickerStore`. No UI knowledge. Returns per-item results; does not throw.
 
 - **`StickerGridViewController`** — `UICollectionView` whose cells host `MSStickerView`. Reads from `StickerStore`, never from disk directly.
+
+- **`PasteViewController`** — the paste control, the diff report, and the batch summary. Self-contained and parent-agnostic, so it can be presented from the extension's expanded mode (v1) or full-screen from the host app (paid tier) with no changes.
 
 ### Data model
 
@@ -224,7 +239,7 @@ Viable, but the obstacles are legal rather than technical.
 - **Intellectual property (App Review Guideline 5.2) is the real gate.** Most Discord custom emoji are cropped frames from copyrighted work. The app's saving grace is structural and already present: it ships empty and the user supplies content, making it a tool rather than a distributor. **Never bundle a starter set of third-party characters.** If demo content is needed for review, use Google's openly licensed blob emoji (Apache 2.0 / CC-BY), which are also the on-brand aesthetic.
 - **Discord's terms.** Pointing a distributed app at `cdn.discordapp.com` is invisible at one-user scale and noticeable at thousands. Discord may rate-limit or block it. This is a business risk, not a review blocker.
 - **Mechanics.** Paid Developer Program, privacy policy URL, support URL, screenshots.
-- **Code impact is small.** A paid account unlocks App Groups, so paste and management move into a full-screen host app and the extension becomes a thin browser. The injected storage root in §3 is what keeps that a changed initializer rather than a restructure.
+- **Code impact is small.** A paid account unlocks App Groups, so paste and management move into a full-screen host app and the extension becomes a thin browser. The three seams in §3 — the `StickerKit` framework, the injected storage root, and the parent-agnostic `PasteViewController` — are what keep that an evening's work rather than a restructure.
 
 ---
 
