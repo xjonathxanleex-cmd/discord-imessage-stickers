@@ -33,7 +33,7 @@ These shape every decision below. Losing track of one invalidates the design.
 
 4. **`MSSticker` enforces limits:** file ≤ 500 KB, dimensions between 100×100 and 618×618. `MSSticker.init(contentsOfFileURL:localizedDescription:)` throws when a file violates them.
 
-5. **Discord stores custom emoji at 128×128.** No higher-resolution original exists anywhere. See §7.
+5. **Discord stores custom emoji at 128×128 or smaller, and not necessarily square.** No higher-resolution original exists anywhere, and `?size=` cannot upscale. Measured emoji include a 76×61 case that falls below `MSSticker`'s floor. See §7.
 
 6. **The Xcode project must be created from Apple's templates** on the Mac — do not hand-author `project.pbxproj`:
    - `File → New → Project → iOS → App`
@@ -69,13 +69,15 @@ None of these three costs anything today — the view controller must live somew
 
 ### Units
 
-Five units inside `StickerKit`, each independently understandable and — except the last two — independently testable without a device.
+Six units inside `StickerKit`, each independently understandable and — except the last two — independently testable without a device.
 
 - **`EmojiMarkupParser`** — pure function, no I/O. String in, `[ParsedEmoji]` out. Regex `<(a)?:([A-Za-z0-9_]+):(\d+)>`, deduped by ID within the batch.
 
 - **`StickerStore`** — sole owner of `<root>/stickers/*.png` and `<root>/manifest.json`. Confined to a serial queue; nothing else touches disk. API: `all()`, `search(_:)`, `add(_:)`, `delete(_:)`, `recordUse(_:)`.
 
-- **`EmojiDownloader`** — `[ParsedEmoji]` → concurrent fetch (cap ~5) → validate → hand files to `StickerStore`. No UI knowledge. Returns per-item results; does not throw.
+- **`StickerImageProcessor`** — pure image transform, no network and no store. Data in, normalized PNG data out: aspect-fit and centre onto a fixed square transparent canvas at high interpolation quality. Exists because raw Discord bytes routinely violate `MSSticker`'s dimension floor (§7).
+
+- **`EmojiDownloader`** — `[ParsedEmoji]` → concurrent fetch (cap ~5) → normalize → validate → hand files to `StickerStore`. No UI knowledge. Returns per-item results; does not throw.
 
 - **`StickerGridViewController`** — `UICollectionView` whose cells host `MSStickerView`. Reads from `StickerStore`, never from disk directly.
 
@@ -104,7 +106,7 @@ No Discord token, no bot, no ToS gray area.
 
 Discord's "Copy Text" on a message returns raw markup: `<:blobcatcozy:823847191234>`. The workflow is: open the Discord emoji picker → tap 30–50 emoji into the compose box → select all → copy → paste into the app. One paste is one batch.
 
-Emoji are fetched from the public CDN at `https://cdn.discordapp.com/emojis/<id>.png?size=512`, which needs no auth. Requesting `.png` on an animated emoji returns a static first frame — which matches the static-only requirement for free.
+Emoji are fetched from the public CDN at `https://cdn.discordapp.com/emojis/<id>.png`, which needs no auth. No `size` parameter is sent, because it can only downscale (§7). Requesting `.png` on an animated emoji returns a static first frame — verified, and it matches the static-only requirement for free.
 
 Search on emoji *name* works only because pasted markup carries the name. CDN URLs alone would give IDs with no searchable text.
 
@@ -135,9 +137,10 @@ The path a pasted string takes. All of it runs inside the extension, triggered f
 
 4. **Download.** `EmojiDownloader` fetches new IDs via `URLSession`, concurrency capped at ~5. Each item proceeds independently.
 
-5. **Validate before commit.** Two gates:
-   - Cheap: byte count ≤ 500 KB, and PNG-header dimensions within 100–618. If the 512 render exceeds 500 KB, refetch at 256 before rejecting (§7).
-   - Decisive: construct an `MSSticker` from the file URL immediately. If the initializer throws, delete the file and drop the entry.
+5. **Normalize, then validate before commit.**
+   - Normalize: `StickerImageProcessor` renders the downloaded bytes onto a 256×256 transparent canvas (§7). Downloaded dimensions are therefore never checked directly — the canvas guarantees them.
+   - Cheap gate: byte count ≤ 500 KB. If the 256 render exceeds it, re-render at 128 before rejecting.
+   - Decisive gate: construct an `MSSticker` from the file URL immediately. If the initializer throws, delete the file and drop the entry.
 
    The second gate exists because the natural place to call the throwing initializer is `cellForItemAt` during scroll, where a throw is a crash mid-gesture on a device with no debugger attached. Constructing it once at download time converts a scroll-time crash into a download-time skip, and establishes the manifest invariant from §3.
 
@@ -159,7 +162,7 @@ Organizing principle: **a batch never fails as a unit.** Every emoji succeeds or
 |---|---|
 | Emoji deleted from server (404) | Skip and count. Reported as *"3 emoji no longer exist."* Not retried — a 404 here is permanent. |
 | No network | Detected before any work begins. *"You're offline — paste again when you're back."* The pasted text is not consumed. |
-| Fails validation (oversized after 256 fallback, wrong dimensions, or `MSSticker` won't construct) | File deleted, entry never enters the manifest. Counted as *"1 couldn't be used."* |
+| Fails validation (undecodable bytes, oversized even after the 128 re-render, or `MSSticker` won't construct) | File deleted, entry never enters the manifest. Counted as *"1 couldn't be used."* Note that undersized and non-square source images are **not** failures — normalization (§7) absorbs them. |
 | Duplicate paste | Not an error. The step-3 diff makes it a no-op. |
 | Malformed or non-emoji text | Zero matches is a normal outcome: *"No Discord emoji found in what you pasted."* |
 | Partial batch failure | The expected case, not the exceptional one. 9 of 12 landing is a success with a footnote. |
@@ -172,19 +175,19 @@ Organizing principle: **a batch never fails as a unit.** Every emoji succeeds or
 
 ## 7. Image quality
 
-**The ceiling is fixed and low.** Discord downsizes every custom emoji to 128×128 on upload and discards the original. There is no high-resolution version to fetch, and no conversion can create one — any upscale invents plausible pixels between real ones.
+**The ceiling is fixed and low.** Discord downsizes every custom emoji on upload — 128×128 at most — and discards the original. There is no high-resolution version to fetch, and no conversion can create one; any upscale invents plausible pixels between real ones.
 
-**What we do anyway, because it is free.** Request `?size=512` rather than accepting the default 128px render. Discord resamples server-side with good quality; we then hand iOS an image close to the size it will actually display. Without this, a 128px image gets stretched across roughly 400 physical pixels by the display compositor on every frame, using whatever cheap filter it picked — which is the visible blur users notice when they download Discord emoji by hand.
+**`?size=` only downscales.** Measured against live emoji (see `docs/superpowers/plans/task-0-findings.md`): requests at 256, 512, and 1024 all return the native image byte-for-byte, identical to requesting no size at all. Only `size=64` produced a smaller image. The parameter is a downscale cap, not a resampler, so there is no server-side upscale to obtain and no reason to request one. **The downloader requests the bare URL with no `size` parameter.**
 
-To be precise about the benefit: this is not more detail. It is the same 128px of information, resampled well once, instead of resampled badly at display time. The result is clean and soft rather than blurry and smeared. It will look clearly better than a manual download and will never look as crisp as a native Apple sticker.
+**Emoji are frequently smaller than `MSSticker` allows.** Discord does not pad emoji to a square. A measured animated emoji returns 76×61, below the 100×100 floor `MSSticker` enforces. Undersized and non-square emoji are ordinary rather than exotic, so raw downloaded bytes can never go straight to `MSSticker`.
 
-512 is the largest power of two below `MSSticker`'s 618×618 maximum.
+**Normalization.** Every downloaded image is rendered onto a fixed square transparent canvas, aspect-fit and centered, by `StickerImageProcessor` before validation. One code path solves three problems at once: undersized emoji clear the 100px floor, non-square emoji get consistent framing in the grid, and extreme aspect ratios are absorbed by padding rather than by a scale calculation that cannot satisfy both the floor and the ceiling simultaneously.
 
-**Adaptive fallback.** A 512×512 PNG of flat art is small, but a busy or photographic emoji upscaled to 512 can exceed the 500 KB limit. The downloader then refetches at 256 rather than discarding the emoji. Falling back one step is strictly better than reporting a failure when a usable smaller version was one request away.
+**Canvas size: 256×256.** The tradeoff is memory against sharpness, and memory wins. The extension's 40–120 MB ceiling is this project's documented top crash risk (§2 constraint 3); with roughly 20 cells visible, decoded RGBA costs about 5 MB at 256 versus about 20 MB at 512. Twenty megabytes against a 40 MB floor is not a margin worth spending on interpolated detail that was never in the source. Interpolation quality is set to high, so the one resample that does happen is a good one. **This constant is validated by Task 11's scroll test** — if the extension is still killed, drop it to 128.
 
-**To verify on the Mac before writing `EmojiDownloader`:** Discord's CDN restricts `size` to an allowed list of values. Powers of two are accepted. Confirm with a single `curl` against a known emoji ID that `?size=512` returns 200 and a 512×512 PNG.
+**Adaptive fallback.** If the rendered 256×256 PNG exceeds the 500 KB limit, re-render at 128×128 rather than discarding the emoji. In practice 128px source art rendered at 256 lands well under the limit, so this path is a guard rather than a routine occurrence.
 
-**Explicitly not built:** on-device ML super-resolution. Running a CoreML model inside a Messages extension would trade the project's largest reliability risk (§2 constraint 3) for a marginal sharpness gain.
+**Explicitly not built:** on-device ML super-resolution. Running a CoreML model inside a Messages extension would trade the project's largest reliability risk for a marginal sharpness gain. Also not built: pixel-art detection to switch interpolation to nearest-neighbour. It would genuinely help crisp, hard-edged emoji, but classifying them reliably is a project of its own.
 
 ---
 
@@ -198,7 +201,9 @@ The dividing line is whether a behavior depends on something we control. Logic w
 
 **`StickerStore`.** Round-trips against a temp directory, enabled by the injected storage root. Cases: add then read back; adding the same ID twice does not duplicate; delete removes both the manifest entry and the file; `recordUse` increments and survives a reload; search is case-insensitive substring; a deliberately corrupted `manifest.json` triggers the §6 salvage path rather than crashing.
 
-**`EmojiDownloader`.** Against a stubbed `URLProtocol`, so no real request goes out and the miserable-to-reproduce failures become ordinary tests: a 404; a response over 500 KB that must fall back to 256; a response still over the limit at 256, which must be rejected; a batch where 9 succeed and 3 fail, returning both lists. §6's error table is only trustworthy if these are pinned here.
+**`StickerImageProcessor`.** A pure transform, so the awkward real-world inputs Task 0 uncovered become cheap tests: a 76×61 source must come back 256×256 with its aspect ratio intact; a 128×128 source must come back 256×256; an extreme 400×20 strip must be padded rather than stretched; undecodable bytes must return nil rather than throwing. Every output must satisfy `MSSticker`'s bounds by construction.
+
+**`EmojiDownloader`.** Against a stubbed `URLProtocol`, so no real request goes out and the miserable-to-reproduce failures become ordinary tests: a 404; a rendered image over 500 KB that must fall back to a 128 canvas; one still over the limit, which must be rejected; a batch where 9 succeed and 3 fail, returning both lists. §6's error table is only trustworthy if these are pinned here.
 
 ### Manual device checklist
 
@@ -245,6 +250,6 @@ Viable, but the obstacles are legal rather than technical.
 
 ## 11. Verify on the Mac before coding
 
-1. `curl` a known emoji ID at `?size=512` — confirm 200 and 512×512 output, and confirm which `size` values the CDN accepts.
-2. Confirm `UIPasteControl` is usable inside a Messages extension on the target iOS version.
-3. Confirm the free Personal Team provisions both targets together without an App Groups entitlement anywhere in either target's capabilities.
+1. ~~`curl` a known emoji ID at `?size=512`~~ — **done 2026-08-07.** Results in `docs/superpowers/plans/task-0-findings.md`. Two assumptions failed and §3, §4, §5, §6, §7 and §8 were corrected accordingly: `size` only downscales, and emoji below 100px are common enough to require normalization.
+2. Confirm `UIPasteControl` is usable inside a Messages extension on the target iOS version. *(Verified in Task 11 Step 2 on device.)*
+3. Confirm the free Personal Team provisions both targets together without an App Groups entitlement anywhere in either target's capabilities. *(Verified in Task 1 on the Mac.)*

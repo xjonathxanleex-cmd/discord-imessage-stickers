@@ -20,7 +20,8 @@ Every task's requirements implicitly include this section.
 - **No App Groups entitlement may appear in any target.** It fails to provision on a free Personal Team and the build will not compile. Do not add it, even speculatively.
 - **No third-party dependencies.** No SPM packages, no CocoaPods.
 - **`MSSticker` limits:** file ≤ 500,000 bytes; both dimensions between 100 and 618 inclusive.
-- **CDN URL format:** `https://cdn.discordapp.com/emojis/<id>.png?size=<size>` where size is 512, falling back to 256.
+- **CDN URL format:** `https://cdn.discordapp.com/emojis/<id>.png` — **no `size` parameter.** Task 0 measured that `size` only downscales; requesting 256/512/1024 returns the native image unchanged. See `task-0-findings.md`.
+- **Every downloaded image is normalized to a 256×256 transparent canvas** before validation. Discord emoji are frequently non-square and sometimes below `MSSticker`'s 100px floor (a measured case is 76×61), so raw bytes must never reach `MSSticker` directly.
 - **Download concurrency cap: 5.**
 - **Recents cap: 16**, sorted by `useCount` descending, `addedAt` descending as tiebreak.
 - **Manifest invariant:** no entry may enter `manifest.json` without an `MSSticker` having been successfully constructed from its file first.
@@ -30,77 +31,29 @@ Every task's requirements implicitly include this section.
 
 ---
 
-### Task 0: Verify CDN behavior
+### Task 0: Verify CDN behavior — ✅ DONE 2026-08-07
 
-The spec's §11 lists three unverified assumptions. This task covers the first — the CDN's `size` handling — because it is pure shell work and blocks Task 5. The other two are verified in place: provisioning without App Groups in Task 1 Steps 7–9, and `UIPasteControl` inside an extension in Task 11 Step 2.
+**Do not re-run this task.** It is recorded here because its results reshaped
+Tasks 3, 4b and 5. Full data: `docs/superpowers/plans/task-0-findings.md`.
 
-**Files:**
-- Create: `docs/superpowers/plans/task-0-findings.md`
+Measured against `<:67:1481800758532903104>` and `<a:cuh:1229610158183678072>`:
 
-**Interfaces:**
-- Consumes: nothing.
-- Produces: a confirmed value for `StickerLimits.preferredSize` (expected `512`) and `StickerLimits.fallbackSize` (expected `256`), consumed by Task 3 and Task 5.
+- [x] **`?size=` only downscales.** Requests at 256, 512 and 1024 all returned
+  the native 128×128 image byte-for-byte identical to the bare URL (17,651
+  bytes each). Only `size=64` produced something smaller. **The spec's
+  server-side-upscale premise was false**, so the downloader now requests the
+  bare URL and `StickerLimits.preferredSize`/`fallbackSize` no longer exist.
 
-- [ ] **Step 1: Confirm the CDN accepts size=512**
+- [x] **Emoji are often non-square and can fall below `MSSticker`'s floor.**
+  The animated test emoji is **76×61** at every requested size — under the
+  100×100 minimum. Discord does not pad emoji to a square, so this is ordinary
+  rather than exotic. Left unhandled it would have silently dropped a real
+  fraction of every paste, reported only as "couldn't be used". **This is why
+  Task 4b exists.**
 
-Pick any Discord emoji ID. `1234567890123456789` below is a placeholder — substitute a real ID copied from Discord markup (`<:name:ID>`).
-
-```bash
-curl -s -o /tmp/emoji512.png -w '%{http_code} %{size_download}\n' \
-  'https://cdn.discordapp.com/emojis/1234567890123456789.png?size=512'
-```
-
-Expected: `200` and a byte count under 500000.
-
-- [ ] **Step 2: Confirm the returned image is actually 512×512**
-
-```bash
-sips -g pixelWidth -g pixelHeight /tmp/emoji512.png
-```
-
-Expected: `pixelWidth: 512`, `pixelHeight: 512`.
-
-- [ ] **Step 3: Confirm the 256 fallback works**
-
-```bash
-curl -s -o /tmp/emoji256.png -w '%{http_code}\n' \
-  'https://cdn.discordapp.com/emojis/1234567890123456789.png?size=256'
-sips -g pixelWidth -g pixelHeight /tmp/emoji256.png
-```
-
-Expected: `200`, and `pixelWidth: 256`.
-
-- [ ] **Step 4: Probe what the CDN does with a non-power-of-two**
-
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' \
-  'https://cdn.discordapp.com/emojis/1234567890123456789.png?size=320'
-```
-
-Record the result. If this returns 400, it confirms why the original handoff's `?size=320` had to be replaced. Either result is fine — this step only documents behavior.
-
-- [ ] **Step 5: Confirm an animated emoji returns a static first frame as PNG**
-
-Substitute an ID from animated markup (`<a:name:ID>`).
-
-```bash
-curl -s -o /tmp/anim.png -w '%{http_code}\n' \
-  'https://cdn.discordapp.com/emojis/<ANIMATED_ID>.png?size=512'
-file /tmp/anim.png
-```
-
-Expected: `200`, and `file` reports `PNG image data`, not GIF.
-
-- [ ] **Step 6: Record findings and commit**
-
-Write `docs/superpowers/plans/task-0-findings.md` with one line per step: the command's actual output, and whether it matched the expectation. If size=512 did **not** return 200, stop and report — every later task depends on it.
-
-```bash
-git add docs/superpowers/plans/task-0-findings.md
-git commit -m "docs: verify Discord CDN size behavior before implementation"
-```
-
----
+- [x] **Animated emoji do return a static PNG first frame.** `file` reports
+  `PNG image data, 76 x 61, 8-bit/color RGBA` for the animated ID. This
+  assumption held.
 
 ### Task 1: Create the Xcode project and three targets
 
@@ -391,7 +344,7 @@ Small value types both later tasks depend on. No behavior worth testing beyond C
 - Produces:
   - `public enum StickerSource: String, Codable { case pasted, server }`
   - `public struct StickerEntry: Codable, Equatable { public let id: String; public let name: String; public let source: StickerSource; public let addedAt: Date; public var useCount: Int }`
-  - `public enum StickerLimits` with `maxBytes: Int`, `minDimension: Int`, `maxDimension: Int`, `preferredSize: Int`, `fallbackSize: Int`, `recentsLimit: Int`, `downloadConcurrency: Int`
+  - `public enum StickerLimits` with `maxBytes: Int`, `minDimension: Int`, `maxDimension: Int`, `canvasSize: Int`, `fallbackCanvasSize: Int`, `recentsLimit: Int`, `downloadConcurrency: Int`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -440,7 +393,13 @@ final class StickerEntryTests: XCTestCase {
         XCTAssertEqual(StickerLimits.maxBytes, 500_000)
         XCTAssertEqual(StickerLimits.minDimension, 100)
         XCTAssertEqual(StickerLimits.maxDimension, 618)
-        XCTAssertLessThan(StickerLimits.preferredSize, StickerLimits.maxDimension)
+    }
+
+    func testBothCanvasSizesAreThemselvesValidStickerDimensions() {
+        for size in [StickerLimits.canvasSize, StickerLimits.fallbackCanvasSize] {
+            XCTAssertGreaterThanOrEqual(size, StickerLimits.minDimension)
+            XCTAssertLessThanOrEqual(size, StickerLimits.maxDimension)
+        }
     }
 }
 ```
@@ -502,12 +461,19 @@ public enum StickerLimits {
     public static let minDimension = 100
     public static let maxDimension = 618
 
-    /// Largest power of two below `maxDimension`. Discord stores emoji at
-    /// 128x128, so this is a server-side upscale, not extra detail — but one
-    /// good resample beats the display layer stretching 128px every frame.
-    public static let preferredSize = 512
-    /// Used when the 512 render exceeds `maxBytes`.
-    public static let fallbackSize = 256
+    /// Side length of the square canvas every sticker is rendered onto.
+    ///
+    /// Task 0 measured that Discord's `?size=` only downscales, and that emoji
+    /// are frequently non-square and sometimes below `minDimension` (76x61 was
+    /// observed). So normalization is mandatory, not cosmetic.
+    ///
+    /// 256 trades sharpness for headroom against the extension's 40-120 MB
+    /// ceiling: ~20 visible cells cost ~5 MB decoded here versus ~20 MB at 512.
+    /// Validated by Task 11's scroll test — if the extension is still killed,
+    /// drop this to 128.
+    public static let canvasSize = 256
+    /// Used when the `canvasSize` render still exceeds `maxBytes`.
+    public static let fallbackCanvasSize = 128
 
     public static let recentsLimit = 16
     public static let downloadConcurrency = 5
@@ -521,7 +487,7 @@ xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
-Expected: PASS, 13 tests total.
+Expected: PASS, 14 tests total.
 
 - [ ] **Step 6: Commit**
 
@@ -928,7 +894,7 @@ xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
-Expected: PASS, 22 tests total.
+Expected: PASS, 23 tests total.
 
 - [ ] **Step 6: Commit**
 
@@ -940,9 +906,207 @@ git commit -m "feat: add StickerStore owning manifest and image files behind an 
 
 ---
 
+### Task 4b: StickerImageProcessor
+
+Added after Task 0 measured live emoji. Discord returns non-square images, some below `MSSticker`'s 100px floor (76×61 observed), so raw bytes can never reach `MSSticker` directly. Numbered `4b` to avoid renumbering the tasks that follow.
+
+**Files:**
+- Create: `StickerKit/StickerImageProcessor.swift`
+- Test: `StickerKitTests/StickerImageProcessorTests.swift`
+
+**Interfaces:**
+- Consumes: `StickerLimits` (Task 3).
+- Produces:
+  - `public enum StickerImageProcessor`
+  - `public static func normalize(_ data: Data, canvas: Int = StickerLimits.canvasSize) -> Data?` — returns PNG data of exactly `canvas`×`canvas`, or `nil` if the input isn't a decodable image.
+
+- [ ] **Step 1: Write the failing tests**
+
+Create `StickerKitTests/StickerImageProcessorTests.swift`:
+
+```swift
+import XCTest
+import UIKit
+import ImageIO
+@testable import StickerKit
+
+final class StickerImageProcessorTests: XCTestCase {
+
+    /// Builds a PNG of arbitrary (possibly non-square) dimensions, with a
+    /// filled inner rect so aspect-ratio preservation is observable.
+    private func png(width: Int, height: Int) -> Data {
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: width, height: height)
+        )
+        return renderer.image { context in
+            UIColor.systemPink.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        }.pngData()!
+    }
+
+    private func size(of data: Data) -> (width: Int, height: Int)? {
+        guard
+            let source = CGImageSourceCreateWithData(data as CFData, nil),
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+                as? [CFString: Any],
+            let width = properties[kCGImagePropertyPixelWidth] as? Int,
+            let height = properties[kCGImagePropertyPixelHeight] as? Int
+        else { return nil }
+        return (width, height)
+    }
+
+    func testUpscalesAnUndersizedNonSquareEmojiToTheCanvas() throws {
+        // The real measured case from Task 0: <a:cuh:...> is 76x61.
+        let output = try XCTUnwrap(StickerImageProcessor.normalize(png(width: 76, height: 61)))
+        let dimensions = try XCTUnwrap(size(of: output))
+
+        XCTAssertEqual(dimensions.width, StickerLimits.canvasSize)
+        XCTAssertEqual(dimensions.height, StickerLimits.canvasSize)
+    }
+
+    func testNormalizesATypical128SquareEmoji() throws {
+        let output = try XCTUnwrap(StickerImageProcessor.normalize(png(width: 128, height: 128)))
+        let dimensions = try XCTUnwrap(size(of: output))
+
+        XCTAssertEqual(dimensions.width, StickerLimits.canvasSize)
+        XCTAssertEqual(dimensions.height, StickerLimits.canvasSize)
+    }
+
+    func testExtremeAspectRatioIsPaddedNotStretched() throws {
+        let output = try XCTUnwrap(StickerImageProcessor.normalize(png(width: 400, height: 20)))
+        let dimensions = try XCTUnwrap(size(of: output))
+
+        // A scale-only approach cannot satisfy both the 100 floor and the 618
+        // ceiling for a 20:1 strip. Padding onto a square canvas always can.
+        XCTAssertEqual(dimensions.width, StickerLimits.canvasSize)
+        XCTAssertEqual(dimensions.height, StickerLimits.canvasSize)
+    }
+
+    func testEveryOutputSatisfiesMSStickerBoundsByConstruction() throws {
+        for (width, height) in [(76, 61), (128, 128), (400, 20), (1, 1), (618, 618)] {
+            let output = try XCTUnwrap(
+                StickerImageProcessor.normalize(png(width: width, height: height)),
+                "failed for \(width)x\(height)"
+            )
+            let dimensions = try XCTUnwrap(size(of: output))
+            XCTAssertGreaterThanOrEqual(dimensions.width, StickerLimits.minDimension)
+            XCTAssertGreaterThanOrEqual(dimensions.height, StickerLimits.minDimension)
+            XCTAssertLessThanOrEqual(dimensions.width, StickerLimits.maxDimension)
+            XCTAssertLessThanOrEqual(dimensions.height, StickerLimits.maxDimension)
+        }
+    }
+
+    func testHonoursAnExplicitSmallerCanvas() throws {
+        let output = try XCTUnwrap(
+            StickerImageProcessor.normalize(png(width: 128, height: 128),
+                                            canvas: StickerLimits.fallbackCanvasSize)
+        )
+        let dimensions = try XCTUnwrap(size(of: output))
+
+        XCTAssertEqual(dimensions.width, StickerLimits.fallbackCanvasSize)
+    }
+
+    func testReturnsNilForUndecodableBytes() {
+        XCTAssertNil(StickerImageProcessor.normalize(Data("not an image".utf8)))
+        XCTAssertNil(StickerImageProcessor.normalize(Data()))
+    }
+
+    func testOutputPreservesTransparency() throws {
+        let output = try XCTUnwrap(StickerImageProcessor.normalize(png(width: 400, height: 20)))
+        let image = try XCTUnwrap(UIImage(data: output))
+        let cgImage = try XCTUnwrap(image.cgImage)
+
+        XCTAssertNotEqual(cgImage.alphaInfo, .none)
+    }
+}
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+```bash
+xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+  -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
+```
+
+Expected: FAIL — `cannot find 'StickerImageProcessor' in scope`.
+
+- [ ] **Step 3: Write the processor**
+
+Create `StickerKit/StickerImageProcessor.swift`:
+
+```swift
+import UIKit
+
+/// Renders arbitrary downloaded bytes onto a fixed square transparent canvas,
+/// aspect-fit and centred.
+///
+/// This exists because Task 0 measured live emoji and found two things: the
+/// CDN's `?size=` only downscales, and Discord does not pad emoji to a square
+/// — a real animated emoji came back 76x61, under `MSSticker`'s 100px floor.
+/// Feeding raw bytes to `MSSticker` would therefore drop a genuine fraction of
+/// every paste.
+///
+/// A square canvas is used rather than a scale calculation because scaling
+/// alone cannot satisfy both the 100 floor and the 618 ceiling for an extreme
+/// aspect ratio — a 20:1 strip has no valid scale factor. Padding always does,
+/// and it gives the grid uniform cells for free.
+public enum StickerImageProcessor {
+
+    /// Returns PNG data of exactly `canvas` x `canvas`, or `nil` if `data`
+    /// is not a decodable image.
+    public static func normalize(
+        _ data: Data,
+        canvas: Int = StickerLimits.canvasSize
+    ) -> Data? {
+        guard let source = UIImage(data: data), source.size.width > 0,
+              source.size.height > 0
+        else { return nil }
+
+        let side = CGFloat(canvas)
+        let scale = min(side / source.size.width, side / source.size.height)
+        let drawnSize = CGSize(width: source.size.width * scale,
+                               height: source.size.height * scale)
+        let origin = CGPoint(x: (side - drawnSize.width) / 2,
+                             y: (side - drawnSize.height) / 2)
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1          // canvas is in pixels, not points
+        format.opaque = false     // keep the alpha channel
+
+        let renderer = UIGraphicsImageRenderer(
+            size: CGSize(width: side, height: side), format: format
+        )
+        let output = renderer.image { context in
+            context.cgContext.interpolationQuality = .high
+            source.draw(in: CGRect(origin: origin, size: drawnSize))
+        }
+        return output.pngData()
+    }
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+```bash
+xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+  -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
+```
+
+Expected: PASS, 30 tests total.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add StickerKit/StickerImageProcessor.swift \
+        StickerKitTests/StickerImageProcessorTests.swift
+git commit -m "feat: normalize downloaded emoji onto a square canvas before validation"
+```
+
+---
+
 ### Task 5: EmojiDownloader
 
-Fetch, validate, commit. Failures are returned as data, never thrown, so a batch never fails as a unit.
+Fetch, normalize, validate, commit. Failures are returned as data, never thrown, so a batch never fails as a unit.
 
 **Files:**
 - Create: `StickerKit/DownloadOutcome.swift`
@@ -1032,21 +1196,31 @@ final class EmojiDownloaderTests: XCTestCase {
         EmojiDownloader(store: store, session: StubURLProtocol.makeSession())
     }
 
-    private func pngData(size: Int, padToBytes: Int? = nil) -> Data {
-        let renderer = UIGraphicsImageRenderer(
-            size: CGSize(width: size, height: size)
-        )
-        let image = renderer.image { context in
+    private func pngData(width: Int, height: Int? = nil) -> Data {
+        let size = CGSize(width: width, height: height ?? width)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { context in
             UIColor.systemTeal.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: size, height: size))
+            context.fill(CGRect(origin: .zero, size: size))
+        }.pngData()!
+    }
+
+    /// Noise compresses badly, so a large random image is the reliable way to
+    /// push a *rendered* PNG past the byte gate. Padding trailing bytes would
+    /// not work here: the downloader re-encodes, discarding anything appended.
+    private func bulkyPNGData(side: Int) -> Data {
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        var seed: UInt64 = 0x9E3779B97F4A7C15
+        for index in pixels.indices {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            pixels[index] = UInt8(truncatingIfNeeded: seed >> 33)
         }
-        var data = image.pngData()!
-        if let target = padToBytes, data.count < target {
-            // PNG readers ignore trailing bytes, so this inflates the file
-            // past the size gate while keeping it a decodable image.
-            data.append(Data(repeating: 0, count: target - data.count))
-        }
-        return data
+        let context = CGContext(
+            data: &pixels, width: side, height: side, bitsPerComponent: 8,
+            bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        return UIImage(cgImage: context.makeImage()!).pngData()!
     }
 
     private func emoji(_ id: String, _ name: String) -> ParsedEmoji {
@@ -1054,7 +1228,7 @@ final class EmojiDownloaderTests: XCTestCase {
     }
 
     func testDownloadsAndCommitsAValidEmoji() async throws {
-        StubURLProtocol.handler = { _ in (200, self.pngData(size: 512)) }
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
 
         let outcome = await makeDownloader().download([emoji("111", "wave")])
 
@@ -1062,13 +1236,28 @@ final class EmojiDownloaderTests: XCTestCase {
         XCTAssertEqual(store.all().map(\.name), ["wave"])
     }
 
-    func testRequestsPreferredSizeFirst() async throws {
-        StubURLProtocol.handler = { _ in (200, self.pngData(size: 512)) }
+    func testRequestsTheBareURLWithNoSizeParameter() async throws {
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
 
         _ = await makeDownloader().download([emoji("111", "wave")])
 
-        let query = StubURLProtocol.requestedURLs.first?.query
-        XCTAssertEqual(query, "size=512")
+        // Task 0 measured that ?size= only downscales, so sending one either
+        // changes nothing or actively degrades the source.
+        XCTAssertNil(StubURLProtocol.requestedURLs.first?.query)
+        XCTAssertEqual(StubURLProtocol.requestedURLs.count, 1)
+    }
+
+    func testAcceptsAnUndersizedNonSquareEmoji() async throws {
+        // The real measured shape of <a:cuh:...>, which raw would fail
+        // MSSticker's 100px floor and be silently dropped.
+        StubURLProtocol.handler = { _ in
+            (200, self.pngData(width: 76, height: 61))
+        }
+
+        let outcome = await makeDownloader().download([emoji("111", "cuh")])
+
+        XCTAssertEqual(outcome.added, ["111"])
+        XCTAssertTrue(outcome.unusable.isEmpty)
     }
 
     func testSkipsEmojiAlreadyInTheStore() async throws {
@@ -1077,7 +1266,7 @@ final class EmojiDownloaderTests: XCTestCase {
                          addedAt: Date(), useCount: 0),
             movingFileFrom: try temp.makePNG(named: "seed.png")
         )
-        StubURLProtocol.handler = { _ in (200, self.pngData(size: 512)) }
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
 
         let outcome = await makeDownloader().download([emoji("111", "wave")])
 
@@ -1095,39 +1284,16 @@ final class EmojiDownloaderTests: XCTestCase {
         XCTAssertTrue(store.all().isEmpty)
     }
 
-    func testFallsBackTo256WhenThe512RenderIsTooLarge() async throws {
-        StubURLProtocol.handler = { request in
-            request.url?.query == "size=512"
-                ? (200, self.pngData(size: 512, padToBytes: 600_000))
-                : (200, self.pngData(size: 256))
-        }
+    func testFallsBackToASmallerCanvasWhenTheRenderIsTooLarge() async throws {
+        // Noise at 618 renders past 500 KB on a 256 canvas but fits on a 128.
+        StubURLProtocol.handler = { _ in (200, self.bulkyPNGData(side: 618)) }
 
         let outcome = await makeDownloader().download([emoji("111", "wave")])
 
         XCTAssertEqual(outcome.added, ["111"])
-        XCTAssertEqual(
-            StubURLProtocol.requestedURLs.map(\.query),
-            ["size=512", "size=256"]
-        )
-    }
-
-    func testRejectsWhenEvenTheFallbackIsTooLarge() async throws {
-        StubURLProtocol.handler = { _ in
-            (200, self.pngData(size: 256, padToBytes: 600_000))
-        }
-
-        let outcome = await makeDownloader().download([emoji("111", "wave")])
-
-        XCTAssertEqual(outcome.unusable, ["111"])
-        XCTAssertTrue(store.all().isEmpty)
-    }
-
-    func testRejectsImagesBelowTheMinimumDimension() async throws {
-        StubURLProtocol.handler = { _ in (200, self.pngData(size: 64)) }
-
-        let outcome = await makeDownloader().download([emoji("111", "wave")])
-
-        XCTAssertEqual(outcome.unusable, ["111"])
+        // Only one network request either way — the retry is a local
+        // re-render, not a refetch.
+        XCTAssertEqual(StubURLProtocol.requestedURLs.count, 1)
     }
 
     func testRejectsNonImagePayloads() async throws {
@@ -1142,7 +1308,7 @@ final class EmojiDownloaderTests: XCTestCase {
         StubURLProtocol.handler = { request in
             let path = request.url?.path ?? ""
             return path.contains("dead") ? (404, Data())
-                                         : (200, self.pngData(size: 512))
+                                         : (200, self.pngData(width: 128))
         }
 
         let outcome = await makeDownloader().download([
@@ -1210,7 +1376,6 @@ Create `StickerKit/EmojiDownloader.swift`:
 
 ```swift
 import Foundation
-import ImageIO
 import Messages
 
 /// Fetches emoji from Discord's public CDN, validates them against
@@ -1296,21 +1461,27 @@ public final class EmojiDownloader: Sendable {
     }
 
     private func fetchOne(_ emoji: ParsedEmoji) async -> ItemResult {
-        switch await fetch(id: emoji.id, size: StickerLimits.preferredSize) {
+        switch await fetch(id: emoji.id) {
         case .notFound:
             return .missing(emoji.id)
         case .failed:
             return .unusable(emoji.id)
-        case .success(let data):
-            if data.count <= StickerLimits.maxBytes {
-                return commit(emoji, data: data)
+        case .success(let raw):
+            // Raw bytes are never trusted: Discord emoji are often non-square
+            // and sometimes below MSSticker's floor (76x61 measured in Task 0).
+            guard let normalized = StickerImageProcessor.normalize(raw) else {
+                return .unusable(emoji.id)
             }
-            // Too big at 512. One step down beats discarding an emoji whose
-            // usable version is a single request away.
-            guard case .success(let smaller) =
-                    await fetch(id: emoji.id, size: StickerLimits.fallbackSize),
-                  smaller.count <= StickerLimits.maxBytes
-            else { return .unusable(emoji.id) }
+            if normalized.count <= StickerLimits.maxBytes {
+                return commit(emoji, data: normalized)
+            }
+            // Re-render smaller rather than discard. A guard, not a routine
+            // path — 128px source art at a 256 canvas lands far under 500 KB.
+            guard let smaller = StickerImageProcessor.normalize(
+                raw, canvas: StickerLimits.fallbackCanvasSize
+            ), smaller.count <= StickerLimits.maxBytes else {
+                return .unusable(emoji.id)
+            }
             return commit(emoji, data: smaller)
         }
     }
@@ -1321,9 +1492,11 @@ public final class EmojiDownloader: Sendable {
         case failed
     }
 
-    private func fetch(id: String, size: Int) async -> FetchResult {
+    /// No `size` parameter: Task 0 measured that it only downscales, so
+    /// requesting one either changes nothing or makes the source worse.
+    private func fetch(id: String) async -> FetchResult {
         guard let url = URL(
-            string: "https://cdn.discordapp.com/emojis/\(id).png?size=\(size)"
+            string: "https://cdn.discordapp.com/emojis/\(id).png"
         ) else { return .failed }
 
         do {
@@ -1350,16 +1523,9 @@ public final class EmojiDownloader: Sendable {
         do {
             try data.write(to: tempURL)
 
-            guard let dimensions = Self.pixelSize(of: tempURL),
-                  dimensions.width >= StickerLimits.minDimension,
-                  dimensions.height >= StickerLimits.minDimension,
-                  dimensions.width <= StickerLimits.maxDimension,
-                  dimensions.height <= StickerLimits.maxDimension
-            else {
-                try? FileManager.default.removeItem(at: tempURL)
-                return .unusable(emoji.id)
-            }
-
+            // Dimensions are guaranteed by the square canvas, so this is a
+            // cheap assertion rather than a real gate. Constructing the
+            // MSSticker below is the decisive check.
             _ = try MSSticker(contentsOfFileURL: tempURL,
                               localizedDescription: emoji.name)
 
@@ -1374,20 +1540,6 @@ public final class EmojiDownloader: Sendable {
             return .unusable(emoji.id)
         }
     }
-
-    /// Reads dimensions from the file header without decoding the image.
-    /// Decoding into a `UIImage` here would defeat the memory discipline the
-    /// whole extension depends on.
-    private static func pixelSize(of url: URL) -> (width: Int, height: Int)? {
-        guard
-            let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-            let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
-                as? [CFString: Any],
-            let width = properties[kCGImagePropertyPixelWidth] as? Int,
-            let height = properties[kCGImagePropertyPixelHeight] as? Int
-        else { return nil }
-        return (width, height)
-    }
 }
 ```
 
@@ -1398,7 +1550,7 @@ xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
-Expected: PASS, 32 tests total.
+Expected: PASS, 39 tests total.
 
 - [ ] **Step 7: Commit**
 
@@ -1917,7 +2069,7 @@ xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
-Expected: PASS, 36 tests total.
+Expected: PASS, 43 tests total.
 
 - [ ] **Step 6: Commit**
 
@@ -2469,7 +2621,7 @@ xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
-Expected: PASS, 39 tests total.
+Expected: PASS, 46 tests total.
 
 - [ ] **Step 5: Add export and import buttons to the paste screen**
 
