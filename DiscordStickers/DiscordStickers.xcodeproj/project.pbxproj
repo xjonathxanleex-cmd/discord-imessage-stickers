@@ -1,0 +1,853 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		ABD6C4A93026A07800D87B8C /* Messages.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ABD6C4A83026A07800D87B8C /* Messages.framework */; };
+		ABD6C4B53026A07900D87B8C /* DiscordStickersMessages.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = ABD6C4A63026A07800D87B8C /* DiscordStickersMessages.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		ABD6C4C83026A15000D87B8C /* StickerKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ABD6C4C03026A15000D87B8C /* StickerKit.framework */; };
+		ABD6C4C93026A15000D87B8C /* StickerKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = ABD6C4C03026A15000D87B8C /* StickerKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		ABD6C4CE3026A17E00D87B8C /* StickerKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ABD6C4C03026A15000D87B8C /* StickerKit.framework */; };
+		ABD6C4DB3026A1B100D87B8C /* StickerKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ABD6C4C03026A15000D87B8C /* StickerKit.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		ABD6C4B33026A07900D87B8C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = ABD6C48230269FF400D87B8C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = ABD6C4A53026A07800D87B8C;
+			remoteInfo = DiscordStickersMessages;
+		};
+		ABD6C4C63026A15000D87B8C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = ABD6C48230269FF400D87B8C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = ABD6C4BF3026A15000D87B8C;
+			remoteInfo = StickerKit;
+		};
+		ABD6C4D03026A17E00D87B8C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = ABD6C48230269FF400D87B8C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = ABD6C4BF3026A15000D87B8C;
+			remoteInfo = StickerKit;
+		};
+		ABD6C4DC3026A1B100D87B8C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = ABD6C48230269FF400D87B8C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = ABD6C4BF3026A15000D87B8C;
+			remoteInfo = StickerKit;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		ABD6C4BA3026A07900D87B8C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				ABD6C4B53026A07900D87B8C /* DiscordStickersMessages.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ABD6C4CD3026A15000D87B8C /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				ABD6C4C93026A15000D87B8C /* StickerKit.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		ABD6C48A30269FF400D87B8C /* DiscordStickers.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DiscordStickers.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		ABD6C4A63026A07800D87B8C /* DiscordStickersMessages.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DiscordStickersMessages.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		ABD6C4A83026A07800D87B8C /* Messages.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Messages.framework; path = System/Library/Frameworks/Messages.framework; sourceTree = SDKROOT; };
+		ABD6C4C03026A15000D87B8C /* StickerKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = StickerKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		ABD6C4D73026A1B100D87B8C /* StickerKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StickerKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		ABD6C49C30269FF500D87B8C /* Exceptions for "DiscordStickers" folder in "DiscordStickers" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = ABD6C48930269FF400D87B8C /* DiscordStickers */;
+		};
+		ABD6C4B93026A07900D87B8C /* Exceptions for "DiscordStickersMessages" folder in "DiscordStickersMessages" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = ABD6C4A53026A07800D87B8C /* DiscordStickersMessages */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		ABD6C48C30269FF400D87B8C /* DiscordStickers */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				ABD6C49C30269FF500D87B8C /* Exceptions for "DiscordStickers" folder in "DiscordStickers" target */,
+			);
+			path = DiscordStickers;
+			sourceTree = "<group>";
+		};
+		ABD6C4AA3026A07800D87B8C /* DiscordStickersMessages */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				ABD6C4B93026A07900D87B8C /* Exceptions for "DiscordStickersMessages" folder in "DiscordStickersMessages" target */,
+			);
+			path = DiscordStickersMessages;
+			sourceTree = "<group>";
+		};
+		ABD6C4C13026A15000D87B8C /* StickerKit */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StickerKit;
+			sourceTree = "<group>";
+		};
+		ABD6C4D83026A1B100D87B8C /* StickerKitTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = StickerKitTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		ABD6C48730269FF400D87B8C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ABD6C4C83026A15000D87B8C /* StickerKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ABD6C4A33026A07800D87B8C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ABD6C4A93026A07800D87B8C /* Messages.framework in Frameworks */,
+				ABD6C4CE3026A17E00D87B8C /* StickerKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ABD6C4BD3026A15000D87B8C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ABD6C4D43026A1B100D87B8C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				ABD6C4DB3026A1B100D87B8C /* StickerKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		ABD6C48130269FF400D87B8C = {
+			isa = PBXGroup;
+			children = (
+				ABD6C48C30269FF400D87B8C /* DiscordStickers */,
+				ABD6C4AA3026A07800D87B8C /* DiscordStickersMessages */,
+				ABD6C4C13026A15000D87B8C /* StickerKit */,
+				ABD6C4D83026A1B100D87B8C /* StickerKitTests */,
+				ABD6C4A73026A07800D87B8C /* Frameworks */,
+				ABD6C48B30269FF400D87B8C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		ABD6C48B30269FF400D87B8C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				ABD6C48A30269FF400D87B8C /* DiscordStickers.app */,
+				ABD6C4A63026A07800D87B8C /* DiscordStickersMessages.appex */,
+				ABD6C4C03026A15000D87B8C /* StickerKit.framework */,
+				ABD6C4D73026A1B100D87B8C /* StickerKitTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		ABD6C4A73026A07800D87B8C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				ABD6C4A83026A07800D87B8C /* Messages.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		ABD6C4BB3026A15000D87B8C /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		ABD6C48930269FF400D87B8C /* DiscordStickers */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ABD6C49D30269FF500D87B8C /* Build configuration list for PBXNativeTarget "DiscordStickers" */;
+			buildPhases = (
+				ABD6C48630269FF400D87B8C /* Sources */,
+				ABD6C48730269FF400D87B8C /* Frameworks */,
+				ABD6C48830269FF400D87B8C /* Resources */,
+				ABD6C4BA3026A07900D87B8C /* Embed Foundation Extensions */,
+				ABD6C4CD3026A15000D87B8C /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				ABD6C4B43026A07900D87B8C /* PBXTargetDependency */,
+				ABD6C4C73026A15000D87B8C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				ABD6C48C30269FF400D87B8C /* DiscordStickers */,
+			);
+			name = DiscordStickers;
+			packageProductDependencies = (
+			);
+			productName = DiscordStickers;
+			productReference = ABD6C48A30269FF400D87B8C /* DiscordStickers.app */;
+			productType = "com.apple.product-type.application";
+		};
+		ABD6C4A53026A07800D87B8C /* DiscordStickersMessages */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ABD6C4B63026A07900D87B8C /* Build configuration list for PBXNativeTarget "DiscordStickersMessages" */;
+			buildPhases = (
+				ABD6C4A23026A07800D87B8C /* Sources */,
+				ABD6C4A33026A07800D87B8C /* Frameworks */,
+				ABD6C4A43026A07800D87B8C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				ABD6C4D13026A17E00D87B8C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				ABD6C4AA3026A07800D87B8C /* DiscordStickersMessages */,
+			);
+			name = DiscordStickersMessages;
+			packageProductDependencies = (
+			);
+			productName = DiscordStickersMessages;
+			productReference = ABD6C4A63026A07800D87B8C /* DiscordStickersMessages.appex */;
+			productType = "com.apple.product-type.app-extension.messages";
+		};
+		ABD6C4BF3026A15000D87B8C /* StickerKit */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ABD6C4CA3026A15000D87B8C /* Build configuration list for PBXNativeTarget "StickerKit" */;
+			buildPhases = (
+				ABD6C4BB3026A15000D87B8C /* Headers */,
+				ABD6C4BC3026A15000D87B8C /* Sources */,
+				ABD6C4BD3026A15000D87B8C /* Frameworks */,
+				ABD6C4BE3026A15000D87B8C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				ABD6C4C13026A15000D87B8C /* StickerKit */,
+			);
+			name = StickerKit;
+			packageProductDependencies = (
+			);
+			productName = StickerKit;
+			productReference = ABD6C4C03026A15000D87B8C /* StickerKit.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		ABD6C4D63026A1B100D87B8C /* StickerKitTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ABD6C4DE3026A1B100D87B8C /* Build configuration list for PBXNativeTarget "StickerKitTests" */;
+			buildPhases = (
+				ABD6C4D33026A1B100D87B8C /* Sources */,
+				ABD6C4D43026A1B100D87B8C /* Frameworks */,
+				ABD6C4D53026A1B100D87B8C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				ABD6C4DD3026A1B100D87B8C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				ABD6C4D83026A1B100D87B8C /* StickerKitTests */,
+			);
+			name = StickerKitTests;
+			packageProductDependencies = (
+			);
+			productName = StickerKitTests;
+			productReference = ABD6C4D73026A1B100D87B8C /* StickerKitTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		ABD6C48230269FF400D87B8C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2660;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					ABD6C48930269FF400D87B8C = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					ABD6C4A53026A07800D87B8C = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					ABD6C4BF3026A15000D87B8C = {
+						CreatedOnToolsVersion = 26.6;
+					};
+					ABD6C4D63026A1B100D87B8C = {
+						CreatedOnToolsVersion = 26.6;
+					};
+				};
+			};
+			buildConfigurationList = ABD6C48530269FF400D87B8C /* Build configuration list for PBXProject "DiscordStickers" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = ABD6C48130269FF400D87B8C;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = ABD6C48B30269FF400D87B8C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				ABD6C48930269FF400D87B8C /* DiscordStickers */,
+				ABD6C4A53026A07800D87B8C /* DiscordStickersMessages */,
+				ABD6C4BF3026A15000D87B8C /* StickerKit */,
+				ABD6C4D63026A1B100D87B8C /* StickerKitTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		ABD6C48830269FF400D87B8C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ABD6C4A43026A07800D87B8C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ABD6C4BE3026A15000D87B8C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ABD6C4D53026A1B100D87B8C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		ABD6C48630269FF400D87B8C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ABD6C4A23026A07800D87B8C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ABD6C4BC3026A15000D87B8C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		ABD6C4D33026A1B100D87B8C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		ABD6C4B43026A07900D87B8C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = ABD6C4A53026A07800D87B8C /* DiscordStickersMessages */;
+			targetProxy = ABD6C4B33026A07900D87B8C /* PBXContainerItemProxy */;
+		};
+		ABD6C4C73026A15000D87B8C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = ABD6C4BF3026A15000D87B8C /* StickerKit */;
+			targetProxy = ABD6C4C63026A15000D87B8C /* PBXContainerItemProxy */;
+		};
+		ABD6C4D13026A17E00D87B8C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = ABD6C4BF3026A15000D87B8C /* StickerKit */;
+			targetProxy = ABD6C4D03026A17E00D87B8C /* PBXContainerItemProxy */;
+		};
+		ABD6C4DD3026A1B100D87B8C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = ABD6C4BF3026A15000D87B8C /* StickerKit */;
+			targetProxy = ABD6C4DC3026A1B100D87B8C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		ABD6C49E30269FF500D87B8C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M4TL2JJ8SF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DiscordStickers/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jonathanlee.DiscordStickers;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		ABD6C49F30269FF500D87B8C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M4TL2JJ8SF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DiscordStickers/Info.plist;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jonathanlee.DiscordStickers;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		ABD6C4A030269FF500D87B8C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = M4TL2JJ8SF;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		ABD6C4A130269FF500D87B8C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = M4TL2JJ8SF;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		ABD6C4B73026A07900D87B8C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "iMessage App Icon";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M4TL2JJ8SF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DiscordStickersMessages/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DiscordStickersMessages;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jonathanlee.DiscordStickers.DiscordStickersMessages;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		ABD6C4B83026A07900D87B8C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "iMessage App Icon";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M4TL2JJ8SF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DiscordStickersMessages/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = DiscordStickersMessages;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jonathanlee.DiscordStickers.DiscordStickersMessages;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		ABD6C4CB3026A15000D87B8C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M4TL2JJ8SF;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				PRODUCT_BUNDLE_IDENTIFIER = com.jonathanlee.DiscordStickers.StickerKit;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_MODULE = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
+		};
+		ABD6C4CC3026A15000D87B8C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M4TL2JJ8SF;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				PRODUCT_BUNDLE_IDENTIFIER = com.jonathanlee.DiscordStickers.StickerKit;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_MODULE = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
+		ABD6C4DF3026A1B100D87B8C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M4TL2JJ8SF;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jonathanlee.DiscordStickers.StickerKitTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		ABD6C4E03026A1B100D87B8C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M4TL2JJ8SF;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jonathanlee.DiscordStickers.StickerKitTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		ABD6C48530269FF400D87B8C /* Build configuration list for PBXProject "DiscordStickers" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ABD6C4A030269FF500D87B8C /* Debug */,
+				ABD6C4A130269FF500D87B8C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		ABD6C49D30269FF500D87B8C /* Build configuration list for PBXNativeTarget "DiscordStickers" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ABD6C49E30269FF500D87B8C /* Debug */,
+				ABD6C49F30269FF500D87B8C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		ABD6C4B63026A07900D87B8C /* Build configuration list for PBXNativeTarget "DiscordStickersMessages" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ABD6C4B73026A07900D87B8C /* Debug */,
+				ABD6C4B83026A07900D87B8C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		ABD6C4CA3026A15000D87B8C /* Build configuration list for PBXNativeTarget "StickerKit" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ABD6C4CB3026A15000D87B8C /* Debug */,
+				ABD6C4CC3026A15000D87B8C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		ABD6C4DE3026A1B100D87B8C /* Build configuration list for PBXNativeTarget "StickerKitTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ABD6C4DF3026A1B100D87B8C /* Debug */,
+				ABD6C4E03026A1B100D87B8C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = ABD6C48230269FF400D87B8C /* Project object */;
+}

@@ -60,11 +60,11 @@ Measured against `<:67:1481800758532903104>` and `<a:cuh:1229610158183678072>`:
 This is GUI work. Xcode's templates generate `project.pbxproj` correctly; hand-authoring it produces subtly broken projects that fail to sign.
 
 **Files:**
-- Create: `DiscordStickers.xcodeproj` (via Xcode template)
-- Create: `DiscordStickers/` (app target sources, template-generated)
-- Create: `DiscordStickersMessages/` (extension target sources, template-generated)
-- Create: `StickerKit/` (framework target)
-- Create: `StickerKitTests/` (unit test bundle)
+- Create: `DiscordStickers/DiscordStickers.xcodeproj` (via Xcode template)
+- Create: `DiscordStickers/DiscordStickers/` (app target sources, template-generated)
+- Create: `DiscordStickers/DiscordStickersMessages/` (extension target sources, template-generated)
+- Create: `DiscordStickers/StickerKit/` (framework target)
+- Create: `DiscordStickers/StickerKitTests/` (unit test bundle)
 
 **Interfaces:**
 - Consumes: nothing.
@@ -163,9 +163,9 @@ git commit -m "chore: scaffold app, iMessage extension, StickerKit framework, an
 A pure function with no I/O — the easiest thing in the project to test exhaustively, and the one place a bug produces silently wrong output rather than a crash.
 
 **Files:**
-- Create: `StickerKit/ParsedEmoji.swift`
-- Create: `StickerKit/EmojiMarkupParser.swift`
-- Test: `StickerKitTests/EmojiMarkupParserTests.swift`
+- Create: `DiscordStickers/StickerKit/ParsedEmoji.swift`
+- Create: `DiscordStickers/StickerKit/EmojiMarkupParser.swift`
+- Test: `DiscordStickers/StickerKitTests/EmojiMarkupParserTests.swift`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -176,7 +176,7 @@ A pure function with no I/O — the easiest thing in the project to test exhaust
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `StickerKitTests/EmojiMarkupParserTests.swift`:
+Create `DiscordStickers/StickerKitTests/EmojiMarkupParserTests.swift`:
 
 ```swift
 import XCTest
@@ -242,7 +242,7 @@ final class EmojiMarkupParserTests: XCTestCase {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -250,7 +250,7 @@ Expected: FAIL — `cannot find 'EmojiMarkupParser' in scope`.
 
 - [ ] **Step 3: Write ParsedEmoji**
 
-Create `StickerKit/ParsedEmoji.swift`:
+Create `DiscordStickers/StickerKit/ParsedEmoji.swift`:
 
 ```swift
 import Foundation
@@ -271,7 +271,7 @@ public struct ParsedEmoji: Equatable, Hashable {
 
 - [ ] **Step 4: Write the parser**
 
-Create `StickerKit/EmojiMarkupParser.swift`:
+Create `DiscordStickers/StickerKit/EmojiMarkupParser.swift`:
 
 ```swift
 import Foundation
@@ -314,7 +314,7 @@ public enum EmojiMarkupParser {
 - [ ] **Step 5: Run tests to verify they pass**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -323,8 +323,8 @@ Expected: PASS, 10 tests.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add StickerKit/ParsedEmoji.swift StickerKit/EmojiMarkupParser.swift \
-        StickerKitTests/EmojiMarkupParserTests.swift
+git add DiscordStickers/StickerKit/ParsedEmoji.swift DiscordStickers/StickerKit/EmojiMarkupParser.swift \
+        DiscordStickers/StickerKitTests/EmojiMarkupParserTests.swift
 git commit -m "feat: parse Discord emoji markup into deduped ParsedEmoji values"
 ```
 
@@ -335,9 +335,9 @@ git commit -m "feat: parse Discord emoji markup into deduped ParsedEmoji values"
 Small value types both later tasks depend on. No behavior worth testing beyond Codable round-tripping the exact JSON shape the spec specifies.
 
 **Files:**
-- Create: `StickerKit/StickerEntry.swift`
-- Create: `StickerKit/StickerLimits.swift`
-- Test: `StickerKitTests/StickerEntryTests.swift`
+- Create: `DiscordStickers/StickerKit/StickerEntry.swift`
+- Create: `DiscordStickers/StickerKit/StickerLimits.swift`
+- Test: `DiscordStickers/StickerKitTests/StickerEntryTests.swift`
 
 **Interfaces:**
 - Consumes: nothing.
@@ -348,7 +348,7 @@ Small value types both later tasks depend on. No behavior worth testing beyond C
 
 - [ ] **Step 1: Write the failing test**
 
-Create `StickerKitTests/StickerEntryTests.swift`:
+Create `DiscordStickers/StickerKitTests/StickerEntryTests.swift`:
 
 ```swift
 import XCTest
@@ -407,7 +407,7 @@ final class StickerEntryTests: XCTestCase {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -415,7 +415,7 @@ Expected: FAIL — `cannot find 'StickerEntry' in scope`.
 
 - [ ] **Step 3: Write StickerEntry**
 
-Create `StickerKit/StickerEntry.swift`:
+Create `DiscordStickers/StickerKit/StickerEntry.swift`:
 
 ```swift
 import Foundation
@@ -447,7 +447,7 @@ public struct StickerEntry: Codable, Equatable {
 
 - [ ] **Step 4: Write StickerLimits**
 
-Create `StickerKit/StickerLimits.swift`:
+Create `DiscordStickers/StickerKit/StickerLimits.swift`:
 
 ```swift
 import Foundation
@@ -483,7 +483,7 @@ public enum StickerLimits {
 - [ ] **Step 5: Run tests to verify they pass**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -492,8 +492,8 @@ Expected: PASS, 14 tests total.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add StickerKit/StickerEntry.swift StickerKit/StickerLimits.swift \
-        StickerKitTests/StickerEntryTests.swift
+git add DiscordStickers/StickerKit/StickerEntry.swift DiscordStickers/StickerKit/StickerLimits.swift \
+        DiscordStickers/StickerKitTests/StickerEntryTests.swift
 git commit -m "feat: add StickerEntry model and MSSticker limit constants"
 ```
 
@@ -504,9 +504,9 @@ git commit -m "feat: add StickerEntry model and MSSticker limit constants"
 Sole owner of disk. The injected `root` is what makes this testable against a temp directory and what makes a later App Group migration a one-argument change.
 
 **Files:**
-- Create: `StickerKit/StickerStore.swift`
-- Test: `StickerKitTests/StickerStoreTests.swift`
-- Test: `StickerKitTests/TempDirectory.swift`
+- Create: `DiscordStickers/StickerKit/StickerStore.swift`
+- Test: `DiscordStickers/StickerKitTests/StickerStoreTests.swift`
+- Test: `DiscordStickers/StickerKitTests/TempDirectory.swift`
 
 **Interfaces:**
 - Consumes: `StickerEntry`, `StickerSource`, `StickerLimits` (Task 3).
@@ -525,7 +525,7 @@ Sole owner of disk. The injected `root` is what makes this testable against a te
 
 - [ ] **Step 1: Write the temp directory helper**
 
-Create `StickerKitTests/TempDirectory.swift`:
+Create `DiscordStickers/StickerKitTests/TempDirectory.swift`:
 
 ```swift
 import Foundation
@@ -566,7 +566,7 @@ final class TempDirectory {
 
 - [ ] **Step 2: Write the failing tests**
 
-Create `StickerKitTests/StickerStoreTests.swift`:
+Create `DiscordStickers/StickerKitTests/StickerStoreTests.swift`:
 
 ```swift
 import XCTest
@@ -703,7 +703,7 @@ final class StickerStoreTests: XCTestCase {
 - [ ] **Step 3: Run tests to verify they fail**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -711,7 +711,7 @@ Expected: FAIL — `cannot find 'StickerStore' in scope`.
 
 - [ ] **Step 4: Write StickerStore**
 
-Create `StickerKit/StickerStore.swift`:
+Create `DiscordStickers/StickerKit/StickerStore.swift`:
 
 ```swift
 import Foundation
@@ -890,7 +890,7 @@ public final class StickerStore: @unchecked Sendable {
 - [ ] **Step 5: Run tests to verify they pass**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -899,8 +899,8 @@ Expected: PASS, 23 tests total.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add StickerKit/StickerStore.swift StickerKitTests/StickerStoreTests.swift \
-        StickerKitTests/TempDirectory.swift
+git add DiscordStickers/StickerKit/StickerStore.swift DiscordStickers/StickerKitTests/StickerStoreTests.swift \
+        DiscordStickers/StickerKitTests/TempDirectory.swift
 git commit -m "feat: add StickerStore owning manifest and image files behind an injected root"
 ```
 
@@ -911,8 +911,8 @@ git commit -m "feat: add StickerStore owning manifest and image files behind an 
 Added after Task 0 measured live emoji. Discord returns non-square images, some below `MSSticker`'s 100px floor (76×61 observed), so raw bytes can never reach `MSSticker` directly. Numbered `4b` to avoid renumbering the tasks that follow.
 
 **Files:**
-- Create: `StickerKit/StickerImageProcessor.swift`
-- Test: `StickerKitTests/StickerImageProcessorTests.swift`
+- Create: `DiscordStickers/StickerKit/StickerImageProcessor.swift`
+- Test: `DiscordStickers/StickerKitTests/StickerImageProcessorTests.swift`
 
 **Interfaces:**
 - Consumes: `StickerLimits` (Task 3).
@@ -922,7 +922,7 @@ Added after Task 0 measured live emoji. Discord returns non-square images, some 
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `StickerKitTests/StickerImageProcessorTests.swift`:
+Create `DiscordStickers/StickerKitTests/StickerImageProcessorTests.swift`:
 
 ```swift
 import XCTest
@@ -1024,7 +1024,7 @@ final class StickerImageProcessorTests: XCTestCase {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -1032,7 +1032,7 @@ Expected: FAIL — `cannot find 'StickerImageProcessor' in scope`.
 
 - [ ] **Step 3: Write the processor**
 
-Create `StickerKit/StickerImageProcessor.swift`:
+Create `DiscordStickers/StickerKit/StickerImageProcessor.swift`:
 
 ```swift
 import UIKit
@@ -1088,7 +1088,7 @@ public enum StickerImageProcessor {
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -1097,8 +1097,8 @@ Expected: PASS, 30 tests total.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add StickerKit/StickerImageProcessor.swift \
-        StickerKitTests/StickerImageProcessorTests.swift
+git add DiscordStickers/StickerKit/StickerImageProcessor.swift \
+        DiscordStickers/StickerKitTests/StickerImageProcessorTests.swift
 git commit -m "feat: normalize downloaded emoji onto a square canvas before validation"
 ```
 
@@ -1109,10 +1109,10 @@ git commit -m "feat: normalize downloaded emoji onto a square canvas before vali
 Fetch, normalize, validate, commit. Failures are returned as data, never thrown, so a batch never fails as a unit.
 
 **Files:**
-- Create: `StickerKit/DownloadOutcome.swift`
-- Create: `StickerKit/EmojiDownloader.swift`
-- Test: `StickerKitTests/EmojiDownloaderTests.swift`
-- Test: `StickerKitTests/StubURLProtocol.swift`
+- Create: `DiscordStickers/StickerKit/DownloadOutcome.swift`
+- Create: `DiscordStickers/StickerKit/EmojiDownloader.swift`
+- Test: `DiscordStickers/StickerKitTests/EmojiDownloaderTests.swift`
+- Test: `DiscordStickers/StickerKitTests/StubURLProtocol.swift`
 
 **Interfaces:**
 - Consumes: `ParsedEmoji` (Task 2), `StickerEntry`/`StickerLimits` (Task 3), `StickerStore` (Task 4).
@@ -1122,7 +1122,7 @@ Fetch, normalize, validate, commit. Failures are returned as data, never thrown,
 
 - [ ] **Step 1: Write the network stub**
 
-Create `StickerKitTests/StubURLProtocol.swift`:
+Create `DiscordStickers/StickerKitTests/StubURLProtocol.swift`:
 
 ```swift
 import Foundation
@@ -1168,7 +1168,7 @@ final class StubURLProtocol: URLProtocol {
 
 - [ ] **Step 2: Write the failing tests**
 
-Create `StickerKitTests/EmojiDownloaderTests.swift`:
+Create `DiscordStickers/StickerKitTests/EmojiDownloaderTests.swift`:
 
 ```swift
 import XCTest
@@ -1331,7 +1331,7 @@ final class EmojiDownloaderTests: XCTestCase {
 - [ ] **Step 3: Run tests to verify they fail**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -1339,7 +1339,7 @@ Expected: FAIL — `cannot find 'EmojiDownloader' in scope`.
 
 - [ ] **Step 4: Write DownloadOutcome**
 
-Create `StickerKit/DownloadOutcome.swift`:
+Create `DiscordStickers/StickerKit/DownloadOutcome.swift`:
 
 ```swift
 import Foundation
@@ -1372,7 +1372,7 @@ public struct DownloadOutcome: Equatable {
 
 - [ ] **Step 5: Write EmojiDownloader**
 
-Create `StickerKit/EmojiDownloader.swift`:
+Create `DiscordStickers/StickerKit/EmojiDownloader.swift`:
 
 ```swift
 import Foundation
@@ -1546,7 +1546,7 @@ public final class EmojiDownloader: Sendable {
 - [ ] **Step 6: Run tests to verify they pass**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -1555,9 +1555,9 @@ Expected: PASS, 39 tests total.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add StickerKit/DownloadOutcome.swift StickerKit/EmojiDownloader.swift \
-        StickerKitTests/EmojiDownloaderTests.swift \
-        StickerKitTests/StubURLProtocol.swift
+git add DiscordStickers/StickerKit/DownloadOutcome.swift DiscordStickers/StickerKit/EmojiDownloader.swift \
+        DiscordStickers/StickerKitTests/EmojiDownloaderTests.swift \
+        DiscordStickers/StickerKitTests/StubURLProtocol.swift
 git commit -m "feat: download, validate, and commit emoji with 256 fallback and per-item results"
 ```
 
@@ -1568,7 +1568,7 @@ git commit -m "feat: download, validate, and commit emoji with 256 fallback and 
 The cell is where the memory discipline lives or dies. Isolated into its own task so it can be reviewed on that basis alone.
 
 **Files:**
-- Create: `StickerKit/StickerCell.swift`
+- Create: `DiscordStickers/StickerKit/StickerCell.swift`
 
 **Interfaces:**
 - Consumes: nothing beyond Messages.framework.
@@ -1579,7 +1579,7 @@ The cell is where the memory discipline lives or dies. Isolated into its own tas
 
 - [ ] **Step 1: Write the cell**
 
-Create `StickerKit/StickerCell.swift`:
+Create `DiscordStickers/StickerKit/StickerCell.swift`:
 
 ```swift
 import UIKit
@@ -1653,7 +1653,7 @@ extension StickerCell: UIGestureRecognizerDelegate {
 - [ ] **Step 2: Verify it builds**
 
 ```bash
-xcodebuild build -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild build -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -20
 ```
 
@@ -1662,7 +1662,7 @@ Expected: `BUILD SUCCEEDED`.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add StickerKit/StickerCell.swift
+git add DiscordStickers/StickerKit/StickerCell.swift
 git commit -m "feat: add StickerCell with reuse-safe sticker clearing and tap observation"
 ```
 
@@ -1671,7 +1671,7 @@ git commit -m "feat: add StickerCell with reuse-safe sticker clearing and tap ob
 ### Task 7: StickerGridViewController
 
 **Files:**
-- Create: `StickerKit/StickerGridViewController.swift`
+- Create: `DiscordStickers/StickerKit/StickerGridViewController.swift`
 
 **Interfaces:**
 - Consumes: `StickerStore` (Task 4), `StickerCell` (Task 6), `StickerLimits` (Task 3).
@@ -1684,7 +1684,7 @@ git commit -m "feat: add StickerCell with reuse-safe sticker clearing and tap ob
 
 - [ ] **Step 1: Write the grid**
 
-Create `StickerKit/StickerGridViewController.swift`:
+Create `DiscordStickers/StickerKit/StickerGridViewController.swift`:
 
 ```swift
 import UIKit
@@ -1807,7 +1807,7 @@ extension StickerGridViewController: UICollectionViewDelegateFlowLayout {
 - [ ] **Step 2: Verify it builds**
 
 ```bash
-xcodebuild build -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild build -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -20
 ```
 
@@ -1816,7 +1816,7 @@ Expected: `BUILD SUCCEEDED`.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add StickerKit/StickerGridViewController.swift
+git add DiscordStickers/StickerKit/StickerGridViewController.swift
 git commit -m "feat: add sticker grid with recents, all, and search filters"
 ```
 
@@ -1827,9 +1827,9 @@ git commit -m "feat: add sticker grid with recents, all, and search filters"
 Parent-agnostic by design: the extension presents it in expanded mode today, and a paid-tier host app could present it full-screen tomorrow with no change.
 
 **Files:**
-- Create: `StickerKit/PasteViewController.swift`
-- Create: `StickerKit/NetworkReachability.swift`
-- Test: `StickerKitTests/PasteSummaryTests.swift`
+- Create: `DiscordStickers/StickerKit/PasteViewController.swift`
+- Create: `DiscordStickers/StickerKit/NetworkReachability.swift`
+- Test: `DiscordStickers/StickerKitTests/PasteSummaryTests.swift`
 
 **Interfaces:**
 - Consumes: `EmojiMarkupParser` (Task 2), `StickerStore` (Task 4), `EmojiDownloader`/`DownloadOutcome` (Task 5).
@@ -1841,7 +1841,7 @@ Parent-agnostic by design: the extension presents it in expanded mode today, and
 
 - [ ] **Step 1: Write the paste screen**
 
-Create `StickerKit/PasteViewController.swift`:
+Create `DiscordStickers/StickerKit/PasteViewController.swift`:
 
 ```swift
 import UIKit
@@ -1977,7 +1977,7 @@ public final class PasteViewController: UIViewController {
 
 - [ ] **Step 2: Write the reachability check**
 
-Create `StickerKit/NetworkReachability.swift`:
+Create `DiscordStickers/StickerKit/NetworkReachability.swift`:
 
 ```swift
 import Network
@@ -2006,7 +2006,7 @@ enum NetworkReachability {
 - [ ] **Step 3: Verify it builds**
 
 ```bash
-xcodebuild build -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild build -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -20
 ```
 
@@ -2014,7 +2014,7 @@ Expected: `BUILD SUCCEEDED`.
 
 - [ ] **Step 4: Add summary tests**
 
-Create `StickerKitTests/PasteSummaryTests.swift`:
+Create `DiscordStickers/StickerKitTests/PasteSummaryTests.swift`:
 
 ```swift
 import XCTest
@@ -2065,7 +2065,7 @@ final class PasteSummaryTests: XCTestCase {
 - [ ] **Step 5: Run tests to verify they pass**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -2074,8 +2074,8 @@ Expected: PASS, 43 tests total.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add StickerKit/PasteViewController.swift StickerKit/NetworkReachability.swift \
-        StickerKitTests/PasteSummaryTests.swift
+git add DiscordStickers/StickerKit/PasteViewController.swift DiscordStickers/StickerKit/NetworkReachability.swift \
+        DiscordStickers/StickerKitTests/PasteSummaryTests.swift
 git commit -m "feat: add parent-agnostic paste screen with UIPasteControl and batch summary"
 ```
 
@@ -2084,7 +2084,7 @@ git commit -m "feat: add parent-agnostic paste screen with UIPasteControl and ba
 ### Task 9: Wire the extension together
 
 **Files:**
-- Modify: `DiscordStickersMessages/MessagesViewController.swift` (replace template contents)
+- Modify: `DiscordStickers/DiscordStickersMessages/MessagesViewController.swift` (replace template contents)
 
 **Interfaces:**
 - Consumes: everything in `StickerKit`.
@@ -2092,7 +2092,7 @@ git commit -m "feat: add parent-agnostic paste screen with UIPasteControl and ba
 
 - [ ] **Step 1: Replace the template view controller**
 
-Replace the entire contents of `DiscordStickersMessages/MessagesViewController.swift`:
+Replace the entire contents of `DiscordStickers/DiscordStickersMessages/MessagesViewController.swift`:
 
 ```swift
 import UIKit
@@ -2259,7 +2259,7 @@ extension MessagesViewController: UISearchBarDelegate {
 - [ ] **Step 2: Build and run on the simulator**
 
 ```bash
-xcodebuild build -project DiscordStickers.xcodeproj -scheme DiscordStickersMessages \
+xcodebuild build -project DiscordStickers/DiscordStickers.xcodeproj -scheme DiscordStickersMessages \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -20
 ```
 
@@ -2274,7 +2274,7 @@ Open the extension. Expand the drawer. Confirm the paste control and search bar 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add DiscordStickersMessages/MessagesViewController.swift
+git add DiscordStickers/DiscordStickersMessages/MessagesViewController.swift
 git commit -m "feat: wire grid, search, tabs, and paste into the Messages extension"
 ```
 
@@ -2283,7 +2283,7 @@ git commit -m "feat: wire grid, search, tabs, and paste into the Messages extens
 ### Task 10: Host app shell
 
 **Files:**
-- Modify: `DiscordStickers/ViewController.swift` **or** `DiscordStickers/ContentView.swift`, depending on which interface the Task 1 Step 1 template produced.
+- Modify: `DiscordStickers/DiscordStickers/ViewController.swift` **or** `DiscordStickers/DiscordStickers/ContentView.swift`, depending on which interface the Task 1 Step 1 template produced.
 
 **Interfaces:**
 - Consumes: nothing from `StickerKit`. Intentionally inert in v1.
@@ -2291,7 +2291,7 @@ git commit -m "feat: wire grid, search, tabs, and paste into the Messages extens
 
 Do Step 1a **or** Step 1b, not both. Check which file exists in the `DiscordStickers` group.
 
-- [ ] **Step 1a: Storyboard variant — replace `DiscordStickers/ViewController.swift`**
+- [ ] **Step 1a: Storyboard variant — replace `DiscordStickers/DiscordStickers/ViewController.swift`**
 
 Skip to Step 1b if your project has `ContentView.swift` instead.
 
@@ -2347,7 +2347,7 @@ final class ViewController: UIViewController {
 }
 ```
 
-- [ ] **Step 1b: SwiftUI variant — replace `DiscordStickers/ContentView.swift`**
+- [ ] **Step 1b: SwiftUI variant — replace `DiscordStickers/DiscordStickers/ContentView.swift`**
 
 Skip this if you already did Step 1a.
 
@@ -2392,7 +2392,7 @@ struct ContentView: View {
 - [ ] **Step 2: Build and verify**
 
 ```bash
-xcodebuild build -project DiscordStickers.xcodeproj -scheme DiscordStickers \
+xcodebuild build -project DiscordStickers/DiscordStickers.xcodeproj -scheme DiscordStickers \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -20
 ```
 
@@ -2401,7 +2401,7 @@ Expected: `BUILD SUCCEEDED`.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add DiscordStickers/
+git add DiscordStickers/DiscordStickers/
 git commit -m "feat: add host app shell explaining how to reach the extension"
 ```
 
@@ -2475,9 +2475,9 @@ git commit -m "docs: record device verification results"
 Build this last. Re-pasting already recovers everything except `useCount`, so this exists solely to preserve Recents ordering across the 7-day reinstall. Cut it without regret if it fights.
 
 **Files:**
-- Create: `StickerKit/ManifestTransfer.swift`
-- Modify: `StickerKit/PasteViewController.swift`
-- Test: `StickerKitTests/ManifestTransferTests.swift`
+- Create: `DiscordStickers/StickerKit/ManifestTransfer.swift`
+- Modify: `DiscordStickers/StickerKit/PasteViewController.swift`
+- Test: `DiscordStickers/StickerKitTests/ManifestTransferTests.swift`
 
 **Interfaces:**
 - Consumes: `StickerEntry` (Task 3), `StickerStore` (Task 4), `EmojiDownloader` (Task 5).
@@ -2489,7 +2489,7 @@ Build this last. Re-pasting already recovers everything except `useCount`, so th
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `StickerKitTests/ManifestTransferTests.swift`:
+Create `DiscordStickers/StickerKitTests/ManifestTransferTests.swift`:
 
 ```swift
 import XCTest
@@ -2541,7 +2541,7 @@ final class ManifestTransferTests: XCTestCase {
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -2549,7 +2549,7 @@ Expected: FAIL — `cannot find 'ManifestTransfer' in scope`.
 
 - [ ] **Step 3: Write ManifestTransfer**
 
-Create `StickerKit/ManifestTransfer.swift`:
+Create `DiscordStickers/StickerKit/ManifestTransfer.swift`:
 
 ```swift
 import Foundation
@@ -2617,7 +2617,7 @@ public enum ManifestTransfer {
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-xcodebuild test -project DiscordStickers.xcodeproj -scheme StickerKit \
+xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme StickerKit \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
@@ -2625,7 +2625,7 @@ Expected: PASS, 46 tests total.
 
 - [ ] **Step 5: Add export and import buttons to the paste screen**
 
-In `StickerKit/PasteViewController.swift`, add these two properties after `public var onFinished`:
+In `DiscordStickers/StickerKit/PasteViewController.swift`, add these two properties after `public var onFinished`:
 
 ```swift
     private let exportButton = UIButton(type: .system)
@@ -2693,7 +2693,7 @@ Then add these methods before the closing brace of the class:
 - [ ] **Step 6: Build and verify**
 
 ```bash
-xcodebuild build -project DiscordStickers.xcodeproj -scheme DiscordStickersMessages \
+xcodebuild build -project DiscordStickers/DiscordStickers.xcodeproj -scheme DiscordStickersMessages \
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -20
 ```
 
@@ -2702,8 +2702,8 @@ Expected: `BUILD SUCCEEDED`.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add StickerKit/ManifestTransfer.swift StickerKit/PasteViewController.swift \
-        StickerKitTests/ManifestTransferTests.swift
+git add DiscordStickers/StickerKit/ManifestTransfer.swift DiscordStickers/StickerKit/PasteViewController.swift \
+        DiscordStickers/StickerKitTests/ManifestTransferTests.swift
 git commit -m "feat: add clipboard backup and restore to preserve use counts across reinstalls"
 ```
 
