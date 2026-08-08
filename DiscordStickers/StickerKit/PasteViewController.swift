@@ -195,7 +195,14 @@ public final class PasteViewController: UIViewController {
 
     @objc private func exportTapped() {
         UIPasteboard.general.string = ManifestTransfer.export(from: store)
-        statusLabel.text = "Backup copied. Paste it somewhere safe."
+        // Names the clipboard explicitly and says what destroys it. The old
+        // wording — "Backup copied. Paste it somewhere safe." — reads as a
+        // suggestion, and nothing in it tells you the backup exists *only* on
+        // the clipboard: copy anything at all before pasting and it is gone,
+        // with no warning and nothing to recover. This is the one message in
+        // the app where a vague phrasing costs a user their whole collection.
+        statusLabel.text = "Backup is on your clipboard only — "
+            + "paste it into Notes now, before you copy anything else."
     }
 
     /// Restore reads the pasteboard directly and so will trigger the system
