@@ -101,7 +101,7 @@ public final class EmojiDownloader: Sendable {
     }
 
     private func fetchOne(_ emoji: ParsedEmoji) async -> ItemResult {
-        switch await fetch(id: emoji.id, animated: emoji.isAnimated) {
+        switch await fetch(emoji, animated: emoji.isAnimated) {
         case .notFound:
             return .missing(emoji.id)
         case .failed:
@@ -112,7 +112,7 @@ public final class EmojiDownloader: Sendable {
             // The flag disagreed with reality. The CDN returns 415 for a
             // static emoji requested as .gif, so retry with the other
             // extension and store whichever answer actually worked.
-            switch await fetch(id: emoji.id, animated: !emoji.isAnimated) {
+            switch await fetch(emoji, animated: !emoji.isAnimated) {
             case .success(let raw):
                 return process(emoji, raw: raw, animated: !emoji.isAnimated)
             case .notFound:
@@ -123,13 +123,25 @@ public final class EmojiDownloader: Sendable {
         }
     }
 
-    /// No `size` parameter in either case — measured as ignored for both
-    /// formats, so sending one either changes nothing or degrades the source.
-    private func fetch(id: String, animated: Bool) async -> FetchResult {
-        let ext = animated ? "gif" : "png"
-        guard let url = URL(
-            string: "https://cdn.discordapp.com/emojis/\(id).\(ext)"
-        ) else { return .failed }
+    /// Discord carries no `size` parameter — measured as ignored for both
+    /// its formats. 7TV's `.gif` is not advertised in its own `host.files`
+    /// list but is served, and is preferred over animated WebP because
+    /// ImageIO's animated-WebP frame support is unverified here.
+    private static func url(for emoji: ParsedEmoji, animated: Bool) -> URL? {
+        switch emoji.source {
+        case .pasted, .server, .photo, .link:
+            let ext = animated ? "gif" : "png"
+            return URL(string:
+                "https://cdn.discordapp.com/emojis/\(emoji.id).\(ext)")
+        case .sevenTV:
+            let file = animated ? "4x.gif" : "4x.webp"
+            return URL(string:
+                "https://cdn.7tv.app/emote/\(emoji.id)/\(file)")
+        }
+    }
+
+    private func fetch(_ emoji: ParsedEmoji, animated: Bool) async -> FetchResult {
+        guard let url = Self.url(for: emoji, animated: animated) else { return .failed }
 
         do {
             let (data, response) = try await session.data(from: url)
@@ -211,7 +223,7 @@ public final class EmojiDownloader: Sendable {
     /// invariant, so this and any other import path can't drift apart.
     private func commit(_ emoji: ParsedEmoji, data: Data, animated: Bool) -> ItemResult {
         StickerCommitter.commit(
-            id: emoji.id, name: emoji.name, source: .pasted,
+            id: emoji.id, name: emoji.name, source: emoji.source,
             isAnimated: animated, data: data, to: store
         ) ? .added(emoji.id) : .unusable(emoji.id)
     }

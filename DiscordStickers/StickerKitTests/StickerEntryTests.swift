@@ -184,4 +184,26 @@ final class StickerEntryTests: XCTestCase {
         XCTAssertEqual(StickerSource.photo.rawValue, "photo")
         XCTAssertEqual(StickerSource.link.rawValue, "link")
     }
+
+    func testSevenTVSourceRoundTrips() throws {
+        let entry = StickerEntry(id: "01G3WEGZN0000ET2J0MQP5YJ0G", name: "GAMBA",
+                                 source: .sevenTV,
+                                 addedAt: Date(timeIntervalSince1970: 0),
+                                 useCount: 0)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(
+            StickerEntry.self, from: try encoder.encode(entry)
+        )
+        XCTAssertEqual(decoded.source, .sevenTV)
+    }
+
+    func testSevenTVRawValueIsStable() {
+        // Persisted in manifest.json on the user's device. Renaming it would
+        // orphan every 7TV sticker already stored.
+        XCTAssertEqual(StickerSource.sevenTV.rawValue, "sevenTV")
+    }
 }

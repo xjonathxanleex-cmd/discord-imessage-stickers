@@ -11,6 +11,7 @@ public enum StickerSource: String, Codable {
     case server
     case photo
     case link
+    case sevenTV = "sevenTV"
 }
 
 /// One row of `manifest.json`. Every entry that reaches the manifest has had
