@@ -22,6 +22,11 @@ public enum StickerCommitter {
         data: Data,
         to store: StickerStore
     ) -> Bool {
+        // ".png" here is part of a three-way coupling: `StickerStore.fileURL`
+        // hardcodes the same extension, and `rebuildFromImages` filters on
+        // it when recovering from a missing or corrupt manifest. All three
+        // rely on animated output staying PNG-family (APNG); if that ever
+        // switches to GIF, this must change together with those two.
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(id)-\(UUID().uuidString).png")
 

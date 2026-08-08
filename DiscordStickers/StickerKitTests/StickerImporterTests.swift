@@ -26,8 +26,7 @@ final class StickerImporterTests: XCTestCase {
     }
 
     private func draft(_ name: String, data: Data, isAnimated: Bool = false) -> StickerDraft {
-        StickerDraft(sourceURL: URL(string: "https://e.com/\(name).png"),
-                     name: name, imageData: data,
+        StickerDraft(name: name, imageData: data,
                      origin: .link, isAnimated: isAnimated)
     }
 
@@ -69,11 +68,9 @@ final class StickerImporterTests: XCTestCase {
     func testTheSameImageFromTwoURLsCollapsesToOneSticker() {
         let data = pngData()
         let outcome = StickerImporter.importDrafts([
-            StickerDraft(sourceURL: URL(string: "https://a.com/x.png"),
-                         name: "x", imageData: data, origin: .link,
+            StickerDraft(name: "x", imageData: data, origin: .link,
                          isAnimated: false),
-            StickerDraft(sourceURL: URL(string: "https://b.com/y.png"),
-                         name: "y", imageData: data, origin: .link,
+            StickerDraft(name: "y", imageData: data, origin: .link,
                          isAnimated: false),
         ], into: store)
 
@@ -114,5 +111,61 @@ final class StickerImporterTests: XCTestCase {
 
     func testAnEmptyBatchIsAnEmptyOutcome() {
         XCTAssertTrue(StickerImporter.importDrafts([], into: store).isEmpty)
+    }
+
+    func testAGifURLWithASingleFrameIsRecordedAsStatic() throws {
+        // `isAnimated: true` here is only a guess from the source URL's
+        // extension. A single-frame GIF is not animation, so what actually
+        // gets stored is static — the manifest entry must say so, or a
+        // later restore will request the wrong extension for it.
+        let singleFrame = temp.makeAnimatedGIFData(frameCount: 1)
+        let outcome = StickerImporter.importDrafts(
+            [draft("loop", data: singleFrame, isAnimated: true)], into: store
+        )
+
+        XCTAssertEqual(outcome.added.count, 1)
+        XCTAssertEqual(store.all().first?.isAnimated, false)
+    }
+
+    /// Noise compresses badly, so a large random image is the reliable way
+    /// to push a *rendered* PNG past the byte gate. Mirrors
+    /// `EmojiDownloaderTests.bulkyPNGData`.
+    private func bulkyPNGData(side: Int) -> Data {
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        var seed: UInt64 = 0x9E3779B97F4A7C15
+        for index in pixels.indices {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            pixels[index] = UInt8(truncatingIfNeeded: seed >> 33)
+        }
+        let context = CGContext(
+            data: &pixels, width: side, height: side, bitsPerComponent: 8,
+            bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        return UIImage(cgImage: context.makeImage()!).pngData()!
+    }
+
+    func testFallsBackToASmallerCanvasWhenTheRenderIsTooLarge() {
+        // Noise at 618 renders past 500 KB on a 256 canvas but fits on a
+        // 128 — the same fallback ladder `EmojiDownloader` applies. Without
+        // it, this draft would reach `StickerCommitter` only to be silently
+        // dropped when `MSSticker.init` throws.
+        let outcome = StickerImporter.importDrafts(
+            [draft("noisy", data: bulkyPNGData(side: 618))], into: store
+        )
+
+        XCTAssertEqual(outcome.added.count, 1)
+        XCTAssertTrue(outcome.unusable.isEmpty)
+    }
+
+    func testUnusableDraftsAreRecordedByContentHashNotName() {
+        // Every other array in `DownloadOutcome` holds ids, not
+        // user-chosen names — `unusable` must match, or a caller reading
+        // it as an id list gets a name leaked into it instead.
+        let outcome = StickerImporter.importDrafts(
+            [draft("do not leak this name", data: Data("nope".utf8))], into: store
+        )
+
+        XCTAssertEqual(outcome.unusable, ["sha256-unknown-0"])
     }
 }
