@@ -138,9 +138,18 @@
     var msg = $('msg-raw');
     // Rejections are shown, never swallowed: a user who pastes 40 lines and
     // gets 38 emoji needs to know which two failed and why.
+    //
+    // Every distinct reason, not just the first. A 7TV link missing its
+    // extension and a line of junk fail for unrelated reasons, and showing only
+    // reason[0] tells the user to fix the wrong thing -- the 7TV line reads as
+    // "not an emoji id or a CDN link", which it plainly is.
     if (r.rejected.length) {
+      var reasons = [];
+      r.rejected.forEach(function (x) {
+        if (reasons.indexOf(x.reason) === -1) reasons.push(x.reason);
+      });
       msg.className = 'bad';
-      msg.textContent = r.rejected.length + ' line(s) skipped — ' + r.rejected[0].reason;
+      msg.textContent = r.rejected.length + ' line(s) skipped — ' + reasons.join('; ');
     } else { msg.className = 'muted'; msg.textContent = ''; }
   });
 
