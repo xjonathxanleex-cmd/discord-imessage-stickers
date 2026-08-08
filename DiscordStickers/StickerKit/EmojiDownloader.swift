@@ -192,7 +192,15 @@ public final class EmojiDownloader: Sendable {
         guard animated else {
             // Raw bytes are never trusted: Discord emoji are often non-square
             // and sometimes below MSSticker's floor (76x61 measured in Task 0).
-            guard let normalized = StickerImageProcessor.normalize(raw) else {
+            //
+            // Encoded as a two-frame APNG so the sticker reaches the system
+            // Recents picker after it is sent — iOS only copies animated
+            // stickers there. See StickerImageProcessor.normalizeAsStillAnimation.
+            // Falls back to a plain single-frame PNG if that ever fails or
+            // does not fit, since a sticker that works is worth more than one
+            // that might have shown up in a picker.
+            guard let normalized = StickerImageProcessor.normalizeAsStillAnimation(raw)
+                    ?? StickerImageProcessor.normalize(raw) else {
                 return .unusable(emoji.id)
             }
             if normalized.count <= StickerLimits.maxBytes {

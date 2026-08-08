@@ -39,7 +39,22 @@ These shape every decision below. Losing track of one invalidates the design.
    - `File → New → Project → iOS → App`
    - `File → New → Target → iMessage Extension`
 
-7. **Stickers created at runtime cannot appear in the system stickers drawer.** Tested on-device 2026-08-07: a sticker sent from this app does **not** subsequently appear in the stickers section of the emoji keyboard, nor anywhere else in Apple's unified sticker UI.
+7. **Stickers created at runtime cannot be *installed* into the system stickers drawer — but a sent one can land in its Recents.**
+
+   ~~Tested on-device 2026-08-07: a sticker sent from this app does not subsequently appear in the stickers section of the emoji keyboard, nor anywhere else in Apple's unified sticker UI.~~
+
+   **Corrected 2026-08-08.** The original wording over-generalised a true observation. There is no way to register a *pack* that appears in the system drawer without the user having used it — that part stands. But iOS does copy a **sent** sticker into the system picker's Recents, under one condition:
+
+   | Sticker | Appears in system Recents after sending |
+   |---|---|
+   | Animated | **yes** |
+   | Static | no |
+
+   Measured on device by sending one of each back to back with the same gesture, so the format is the only variable. And it is a **copy, not a reference**: deleting the sticker from this app afterwards leaves the Recents entry working.
+
+   **Consequence.** A still image encoded as a two-frame APNG with identical frames is structurally animated and visually unchanged, so it qualifies. `StickerImageProcessor.normalizeAsStillAnimation` does exactly that, which means **every** sticker becomes reachable from the ordinary iMessage sticker UI after one use — no extension, no drawer.
+
+   APNG rather than GIF on this path specifically: GIF's 1-bit alpha would harden every antialiased edge on artwork that arrives as full RGBA. The animated path pays no such price because its sources are already GIF.
 
    The obstacle is enumeration. Apple surfaces third-party stickers it can *index*, and the documented path for that is a Sticker Pack extension, which declares its contents as files in a code-signed bundle fixed at install time. This app's stickers do not exist until the user pastes them, so the system has no way to know what they are, and there is no public API to register them after the fact.
 
