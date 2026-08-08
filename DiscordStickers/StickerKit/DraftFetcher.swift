@@ -72,7 +72,7 @@ public final class DraftFetcher: Sendable {
         // where the extension is killed. The bytes decide, not the
         // Content-Type header — plenty of servers label images wrongly, and
         // a wrong label should not lose a sticker.
-        guard let dimensions = Self.pixelDimensions(of: data) else {
+        guard let dimensions = ImageDownsampler.pixelSize(of: data) else {
             return .failure(.notAnImage)
         }
         guard dimensions.width <= StickerLimits.maxSourcePixelDimension,
@@ -89,7 +89,7 @@ public final class DraftFetcher: Sendable {
         let imageData: Data
         if !link.isAnimated,
            max(dimensions.width, dimensions.height) > StickerLimits.maxDimension,
-           let downsampled = Self.downsampled(data, maxPixel: StickerLimits.maxDimension) {
+           let downsampled = ImageDownsampler.downsampled(data, maxPixel: StickerLimits.maxDimension) {
             imageData = downsampled
         } else {
             imageData = data
@@ -101,37 +101,5 @@ public final class DraftFetcher: Sendable {
             origin: .link,
             isAnimated: link.isAnimated
         ))
-    }
-
-    /// Reads pixel dimensions from image metadata only — nothing is decoded.
-    /// Returns `nil` when the bytes aren't a decodable image or carry no
-    /// dimensions, which `fetch` treats as `.notAnImage`.
-    private static func pixelDimensions(of data: Data) -> (width: Int, height: Int)? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
-                as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int,
-              let height = properties[kCGImagePropertyPixelHeight] as? Int
-        else { return nil }
-        return (width, height)
-    }
-
-    /// Decodes directly to the target size using ImageIO's thumbnail path, so
-    /// the full-resolution bitmap is never materialized. This is what makes
-    /// the byte cap actually bound memory.
-    private static func downsampled(_ data: Data, maxPixel: Int) -> Data? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil)
-        else { return nil }
-
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-        ]
-        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(
-            source, 0, options as CFDictionary
-        ) else { return nil }
-
-        return UIImage(cgImage: thumbnail).pngData()
     }
 }
