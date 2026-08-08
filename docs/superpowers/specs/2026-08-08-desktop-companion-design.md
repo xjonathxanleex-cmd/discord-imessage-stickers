@@ -90,10 +90,25 @@ Roughly 35 bytes per emoji.
 
 A single static HTML file with no build step, no framework, and no dependencies beyond one QR library. Hosted on GitHub Pages from the existing repo.
 
-**Inputs, both optional and combinable:**
+**Inputs, all optional and combinable:**
 
 1. **Paste Discord markup** — a textarea. Parses `<(a)?:name:id>` with the same rules as the iOS parser: dedupe by id, first occurrence wins, original order preserved.
-2. **7TV** — a text field taking a Twitch username or a 7TV profile/set URL, resolved against the 7TV API (§6).
+2. **7TV** — a text field taking a 7TV emote-set id or URL, resolved against the 7TV API (§6).
+3. **Raw ids and links** — a textarea accepting one entry per line, in any of three shapes:
+   - a bare Discord emoji id (`1481800758532903104`)
+   - a `cdn.discordapp.com/emojis/<id>.<ext>` URL, with or without query parameters
+   - a `cdn.7tv.app/emote/<id>/…` URL
+
+   This exists because the emoji CDN is public and unauthenticated — an id alone resolves,
+   with no token, session, or server membership. Verified: `emojis/1481800758532903104.png`
+   returns 200 with 17,651 bytes from a bare `curl`. Inputs 1 and 2 both require the emoji to
+   appear somewhere you can copy *from*; this one accepts an id found anywhere at all.
+
+   Animation is inferred per line: a `.gif` extension means animated, `.png`/`.webp` means
+   static, and a **bare id defaults to static** — which Discord's CDN self-heals, since a
+   wrongly-static Discord request returns 415 and the phone's downloader retries. That
+   fallback does **not** hold for 7TV (§3), so a 7TV URL without a recognizable extension is
+   rejected with a message rather than guessed at.
 
 **Picker:** everything found renders as a grid of thumbnails with checkboxes, all selected by default, with *Select all* / *Select none*. Names are shown and editable inline — a user who wants `catJAM` called `cat` should not have to wait until the phone to say so.
 
@@ -113,9 +128,33 @@ A single static HTML file with no build step, no framework, and no dependencies 
 
 **Text** is primary and unbounded. On a Mac, Universal Clipboard makes it invisible: copy in the browser, paste on the phone. Elsewhere, users message or email it to themselves.
 
-**QR** is the escape hatch for Windows and Linux, where no clipboard bridge exists. A QR code in byte mode at low error correction holds roughly 2,900 bytes — about **80 emoji** at 35 bytes each.
+**QR** is the escape hatch for Windows and Linux, where no clipboard bridge exists.
 
-Above that, the page **splits into multiple codes**, each a self-contained `DSTK1` payload, labelled *1 of 3*, *2 of 3*. The phone imports each independently and its existing dedupe makes order and repetition harmless. Chunking is presented plainly rather than silently truncating — a payload that quietly dropped half the selection would be the worst possible failure here.
+**Chunking is by bytes, never by emoji count.** Measured against the vendored encoder:
+
+| Error correction | Max bytes | Modules |
+|---|---|---|
+| L | 2,953 | 177 (version 40) |
+| M | 2,331 | 177 |
+| Q | 1,663 | 177 |
+
+An earlier draft of this section said "roughly 80 emoji at 35 bytes each". That is wrong,
+because line length depends on the source: **Discord ids are 18–19 characters and 7TV ids are
+26**, making 7TV lines ~42 bytes against Discord's ~34. The same 80 lines is 2.7 KB of Discord
+or 3.4 KB of 7TV — one fits, one does not. Counting emoji would therefore silently overflow on
+7TV-heavy selections, which is precisely the failure this section exists to prevent.
+
+**Chosen: chunk at 1,200 bytes at error correction M** — about 35 Discord emoji or 28 7TV
+emotes per code, at 133 modules (version 29). This is deliberately well under the 2,331-byte
+ceiling, because the binding constraint is *scanning*, not capacity: a 177-module code is the
+densest QR that exists, and reading one off a laptop screen with a phone camera is marginal.
+Seven codes that each scan on the first try beat three that each need coaxing. Error
+correction M over L for the same reason — glare and screen moiré, not storage.
+
+Chunks are each a self-contained `DSTK1` payload, labelled *1 of 3*, *2 of 3*. The phone
+imports each independently and its existing dedupe makes order and repetition harmless.
+Chunking is presented plainly rather than silently truncating — a payload that quietly dropped
+half the selection would be the worst possible failure here.
 
 ---
 
@@ -185,8 +224,16 @@ case .sevenTV:         "https://cdn.7tv.app/emote/\(id)/4x.webp"
 **Web page** — a small unit test file run in the browser, no framework:
 
 - Discord markup parsing matches the iOS parser on the same inputs, including the dedupe rule. **These two implementations must agree**; a shared corpus of test strings lives in the repo and both are checked against it.
+- Raw id/link parsing: a bare id; a Discord CDN URL with and without query parameters; a `.gif`
+  URL yielding an animated tag; a 7TV URL; a 7TV URL with no recognizable extension **rejected
+  rather than guessed**; a line that is neither id nor URL skipped without killing the batch.
 - Payload generation: correct header, one line per selection, names containing spaces survive, an empty selection yields header-only.
 - Chunking: a set below capacity yields one code; above it splits, every chunk carries the header, and the chunks reassemble to exactly the original selection with nothing dropped or duplicated.
+- **Chunking is byte-driven:** a selection of 7TV emotes and one of Discord emoji with the
+  same *count* but different byte totals must produce different chunk counts. A test that only
+  ever uses one id length cannot catch a count-based implementation.
+- Every emitted chunk encodes successfully as a QR at the configured error-correction level —
+  asserted by calling the encoder, not by comparing byte totals to a constant.
 
 **iOS:**
 
