@@ -22,19 +22,19 @@ public final class StickerGridViewController: UIViewController {
         didSet { if filter != oldValue { reload() } }
     }
 
-    /// While editing, cells show a star and an ×, and `MSStickerView`
-    /// interaction is off — sending and dragging are disabled for the
-    /// duration rather than competing with the edit controls for gestures.
+    /// Which editing affordance cells offer. In any editing mode
+    /// `MSStickerView` interaction is off — sending and dragging are disabled
+    /// for the duration rather than competing with the edit controls for
+    /// gestures.
     ///
-    /// Named `isEditingStickers`, not `isEditing`: `UIViewController` already
-    /// declares a settable `isEditing` tied to its `editButtonItem` and
-    /// `setEditing(_:animated:)` machinery, none of which this app uses. A
-    /// plain `var isEditing` therefore fails to compile, and overriding it
-    /// would let UIKit flip this app's edit mode through a path nobody here
-    /// is watching.
-    public var isEditingStickers: Bool = false {
+    /// Named `editMode`, not `isEditing`: `UIViewController` already declares
+    /// a settable `isEditing` tied to its `editButtonItem` and
+    /// `setEditing(_:animated:)` machinery, none of which this app uses.
+    /// Overriding it would let UIKit flip this app's edit mode through a path
+    /// nobody here is watching.
+    public var editMode: StickerEditMode = .off {
         didSet {
-            if isEditingStickers != oldValue { collectionView?.reloadData() }
+            if editMode != oldValue { collectionView?.reloadData() }
         }
     }
 
@@ -138,7 +138,7 @@ extension StickerGridViewController: UICollectionViewDataSource {
             cell.configure(
                 with: sticker,
                 isFavorite: entry.favoritedAt != nil,
-                isEditing: isEditingStickers,
+                mode: editMode,
                 onTap: { [weak self] in
                     self?.store.recordUse(id: entry.id)
                 },

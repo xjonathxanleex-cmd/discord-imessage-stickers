@@ -22,7 +22,6 @@ public final class PasteViewController: UIViewController {
 
     private let exportButton = UIButton(type: .system)
     private let importButton = UIButton(type: .system)
-    private let linkButton = UIButton(type: .system)
     private let photoButton = UIButton(type: .system)
 
     /// Guards against a second import starting while one is already in
@@ -32,8 +31,8 @@ public final class PasteViewController: UIViewController {
     /// share the same failure mode and the same modal presentation: a photo
     /// pick landing mid-link-fetch (or vice versa) would lose one of them
     /// exactly as silently as two taps on the same button. Set on entry to
-    /// `linkTapped` / `photosTapped`, cleared on every exit — cancel,
-    /// failure, and after the review screen finishes or is dismissed.
+    /// `pasteTapped`'s link branch / `photosTapped`, cleared on every exit —
+    /// cancel, failure, and after the review screen finishes or is dismissed.
     private var isImporting = false
 
     public init(store: StickerStore, downloader: EmojiDownloader) {
@@ -55,7 +54,7 @@ public final class PasteViewController: UIViewController {
         let pasteButton = UIButton(configuration: pasteConfiguration)
         pasteButton.addTarget(self, action: #selector(pasteTapped), for: .touchUpInside)
 
-        statusLabel.text = "Copy Discord or 7TV emoji, then paste them here."
+        statusLabel.text = "Copy emoji, an image link, or a backup — then paste."
         statusLabel.font = .preferredFont(forTextStyle: .footnote)
         statusLabel.textColor = .secondaryLabel
         statusLabel.textAlignment = .center
@@ -71,17 +70,12 @@ public final class PasteViewController: UIViewController {
         importButton.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
         importButton.addTarget(self, action: #selector(importTapped), for: .touchUpInside)
 
-        linkButton.setTitle("Paste Link", for: .normal)
-        linkButton.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
-        linkButton.addTarget(self, action: #selector(linkTapped),
-                             for: .touchUpInside)
-
         photoButton.setTitle("Add Photos", for: .normal)
         photoButton.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
         photoButton.addTarget(self, action: #selector(photosTapped),
                               for: .touchUpInside)
 
-        let buttons = UIStackView(arrangedSubviews: [linkButton, photoButton, exportButton, importButton])
+        let buttons = UIStackView(arrangedSubviews: [photoButton, exportButton, importButton])
         buttons.axis = .horizontal
         buttons.spacing = 16
 
@@ -129,21 +123,27 @@ public final class PasteViewController: UIViewController {
     /// rare action (roughly weekly, or after the 7-day reinstall), so one
     /// prompt per batch is an acceptable trade.
     @objc private func pasteTapped() {
+        guard !isImporting else { return }
         guard let text = UIPasteboard.general.string, !text.isEmpty else {
             statusLabel.text = "Nothing on the clipboard to paste."
             return
         }
-        handle(text)
+
+        // One button for every format. The decision lives in PasteRouter so it
+        // is testable without a pasteboard or a running extension; see there
+        // for why a separate Paste Link button was removed.
+        switch PasteRouter.route(text) {
+        case .payload(let emoji), .markup(let emoji):
+            handle(emoji)
+        case .link(let link):
+            importLink(link)
+        case .none:
+            statusLabel.text = "That's not emoji, an image link, or a backup."
+        }
     }
 
     @MainActor
-    private func handle(_ text: String) {
-        // Route on the payload's own first line rather than asking the user
-        // which format they copied. Both parsers reject the other's format
-        // outright, so a misroute yields nothing rather than something wrong.
-        let parsed = TransferPayloadParser.looksLikePayload(text)
-            ? TransferPayloadParser.parse(text)
-            : EmojiMarkupParser.parse(text)
+    private func handle(_ parsed: [ParsedEmoji]) {
         guard !parsed.isEmpty else {
             statusLabel.text = "No emoji found in what you pasted."
             return
@@ -230,15 +230,11 @@ public final class PasteViewController: UIViewController {
     /// Reads the clipboard directly, which triggers the system "Allow Paste?"
     /// alert. Acceptable here for the same reason Restore accepts it: this is
     /// an occasional action, not the app's core loop.
-    @objc private func linkTapped() {
-        guard !isImporting else { return }
-
-        guard let text = UIPasteboard.general.string,
-              let link = LinkParser.parse(text) else {
-            statusLabel.text = "That doesn't look like a link."
-            return
-        }
-
+    /// Reached from `pasteTapped` when the clipboard holds an image URL rather
+    /// than emoji markup or a backup. Not a button of its own — see the
+    /// routing comment there.
+    @MainActor
+    private func importLink(_ link: ParsedLink) {
         // Checked before any network work so the paste isn't consumed for
         // nothing — the user can simply paste again once they're back
         // online. Same guard and message as the emoji paste flow.
