@@ -2,8 +2,9 @@ import UIKit
 import Messages
 import StickerKit
 
-/// Compact mode shows Recents plus the full grid. Expanded mode adds search
-/// and the paste control.
+/// Compact mode shows whichever of the three tabs (Favorites, Recent, All) is
+/// selected, defaulting to Favorites. Expanded mode adds search, the paste
+/// control, and the Edit button.
 ///
 /// The extension owns storage outright: App Groups is unavailable on a free
 /// Personal Team, so there is no shared container to read from.
@@ -15,7 +16,9 @@ final class MessagesViewController: MSMessagesAppViewController {
     private var paste: PasteViewController!
 
     private let searchBar = UISearchBar()
-    private let tabs = UISegmentedControl(items: ["Recent", "All"])
+    private let tabs = UISegmentedControl(items: ["Favorites", "Recent", "All"])
+    private let editButton = UIButton(type: .system)
+    private let searchRow = UIStackView()
     private let pasteContainer = UIView()
     private let topControls = UIStackView()
 
@@ -39,7 +42,9 @@ final class MessagesViewController: MSMessagesAppViewController {
     }
 
     private func buildUI() {
-        tabs.selectedSegmentIndex = 1
+        // Favorites when there is something in it, otherwise All — so a
+        // first-run user sees exactly what they saw before this feature.
+        tabs.selectedSegmentIndex = store.favorites().isEmpty ? 2 : 0
         tabs.addTarget(self, action: #selector(tabChanged), for: .valueChanged)
         tabs.translatesAutoresizingMaskIntoConstraints = false
 
@@ -48,6 +53,18 @@ final class MessagesViewController: MSMessagesAppViewController {
         searchBar.autocapitalizationType = .none
         searchBar.delegate = self
         searchBar.translatesAutoresizingMaskIntoConstraints = false
+
+        editButton.setTitle("Edit", for: .normal)
+        editButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        editButton.setContentHuggingPriority(.required, for: .horizontal)
+        editButton.addTarget(self, action: #selector(editTapped),
+                             for: .touchUpInside)
+
+        searchRow.axis = .horizontal
+        searchRow.alignment = .center
+        searchRow.spacing = 8
+        searchRow.addArrangedSubview(searchBar)
+        searchRow.addArrangedSubview(editButton)
 
         pasteContainer.translatesAutoresizingMaskIntoConstraints = false
 
@@ -67,7 +84,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         pasteContainer.addSubview(paste.view)
 
         topControls.addArrangedSubview(pasteContainer)
-        topControls.addArrangedSubview(searchBar)
+        topControls.addArrangedSubview(searchRow)
 
         view.addSubview(topControls)
         view.addSubview(tabs)
@@ -119,13 +136,15 @@ final class MessagesViewController: MSMessagesAppViewController {
         guard grid != nil else { return }
 
         let expanded = (style == .expanded)
-        searchBar.isHidden = !expanded
+        searchRow.isHidden = !expanded
         pasteContainer.isHidden = !expanded
         if !expanded {
+            // Never leave the drawer in a state where taps do not send.
+            setStickerEditing(false)
             searchBar.text = nil
             searchBar.resignFirstResponder()
         }
-        grid.filter = tabs.selectedSegmentIndex == 0 ? .recents : .all
+        grid.filter = filterForSelectedTab()
         view.setNeedsLayout()
     }
 
@@ -155,10 +174,31 @@ final class MessagesViewController: MSMessagesAppViewController {
 
     // MARK: - Actions
 
+    /// One place that maps segment index to filter. Three call sites used to
+    /// each carry their own copy of this ternary; a fourth tab would have
+    /// meant finding all of them.
+    private func filterForSelectedTab() -> StickerFilter {
+        switch tabs.selectedSegmentIndex {
+        case 0:  return .favorites
+        case 1:  return .recents
+        default: return .all
+        }
+    }
+
+    private func setStickerEditing(_ editing: Bool) {
+        grid?.isEditingStickers = editing
+        editButton.setTitle(editing ? "Done" : "Edit", for: .normal)
+    }
+
     @objc private func tabChanged() {
         guard grid != nil else { return }
         searchBar.text = nil
-        grid.filter = tabs.selectedSegmentIndex == 0 ? .recents : .all
+        grid.filter = filterForSelectedTab()
+    }
+
+    @objc private func editTapped() {
+        guard grid != nil else { return }
+        setStickerEditing(!grid.isEditingStickers)
     }
 
     private func showFatal(_ message: String) {
@@ -180,7 +220,7 @@ extension MessagesViewController: UISearchBarDelegate {
 
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
         grid.filter = searchText.trimmingCharacters(in: .whitespaces).isEmpty
-            ? (tabs.selectedSegmentIndex == 0 ? .recents : .all)
+            ? filterForSelectedTab()
             : .search(searchText)
     }
 

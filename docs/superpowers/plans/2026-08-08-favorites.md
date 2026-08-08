@@ -606,7 +606,7 @@ git commit -m "feat: add star and delete controls to StickerCell for edit mode"
 
 **Interfaces:**
 - Consumes: `StickerCell.configure(with:isFavorite:isEditing:onTap:onToggleFavorite:onDelete:)` (Task 4), `StickerStore.setFavorite(_:id:)` and `delete(id:)` (Task 2).
-- Produces: `public var isEditing: Bool` on `StickerGridViewController`, defaulting to `false`. Setting it reloads.
+- Produces: `public var isEditingStickers: Bool` on `StickerGridViewController`, defaulting to `false`. Setting it reloads. **Not** named `isEditing` — that collides with `UIViewController`'s own property and does not compile.
 
 - [ ] **Step 1: Add the editing property**
 
@@ -616,8 +616,17 @@ In `DiscordStickers/StickerKit/StickerGridViewController.swift`, add immediately
     /// While editing, cells show a star and an ×, and `MSStickerView`
     /// interaction is off — sending and dragging are disabled for the
     /// duration rather than competing with the edit controls for gestures.
-    public var isEditing: Bool = false {
-        didSet { if isEditing != oldValue { collectionView?.reloadData() } }
+    ///
+    /// Named `isEditingStickers`, not `isEditing`: `UIViewController` already
+    /// declares a settable `isEditing` tied to its `editButtonItem` and
+    /// `setEditing(_:animated:)` machinery, none of which this app uses. A
+    /// plain `var isEditing` therefore fails to compile, and overriding it
+    /// would let UIKit flip this app's edit mode through a path nobody here
+    /// is watching.
+    public var isEditingStickers: Bool = false {
+        didSet {
+            if isEditingStickers != oldValue { collectionView?.reloadData() }
+        }
     }
 ```
 
@@ -646,7 +655,7 @@ Replace the body of the existing `collectionView(_:cellForItemAt:)` method:
             cell.configure(
                 with: sticker,
                 isFavorite: entry.favoritedAt != nil,
-                isEditing: isEditing,
+                isEditing: isEditingStickers,
                 onTap: { [weak self] in
                     self?.store.recordUse(id: entry.id)
                 },
@@ -686,7 +695,7 @@ git commit -m "feat: wire favorite and delete actions through the grid"
 - Modify: `DiscordStickers/DiscordStickersMessages/MessagesViewController.swift`
 
 **Interfaces:**
-- Consumes: `StickerFilter.favorites` (Task 3), `StickerGridViewController.isEditing` (Task 5), `StickerStore.favorites()` (Task 2).
+- Consumes: `StickerFilter.favorites` (Task 3), `StickerGridViewController.isEditingStickers` (Task 5), `StickerStore.favorites()` (Task 2).
 - Produces: the finished feature. Nothing consumes this.
 
 - [ ] **Step 1: Replace the tabs control and add the Edit button**
@@ -716,7 +725,7 @@ Add these two methods immediately before the existing `@objc private func tabCha
     }
 
     private func setEditing(_ editing: Bool) {
-        grid?.isEditing = editing
+        grid?.isEditingStickers = editing
         editButton.setTitle(editing ? "Done" : "Edit", for: .normal)
     }
 ```
@@ -756,7 +765,7 @@ Add this method immediately after `tabChanged()`:
 ```swift
     @objc private func editTapped() {
         guard grid != nil else { return }
-        setEditing(!grid.isEditing)
+        setEditing(!grid.isEditingStickers)
     }
 ```
 

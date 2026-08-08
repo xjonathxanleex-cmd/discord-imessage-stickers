@@ -48,4 +48,50 @@ final class StickerEntryTests: XCTestCase {
             XCTAssertLessThanOrEqual(size, StickerLimits.maxDimension)
         }
     }
+
+    func testFavoritedAtRoundTripsThroughJSON() throws {
+        let entry = StickerEntry(
+            id: "823847191234",
+            name: "blobcatcozy",
+            source: .pasted,
+            addedAt: Date(timeIntervalSince1970: 1_754_604_840),
+            useCount: 12,
+            favoritedAt: Date(timeIntervalSince1970: 1_754_608_000)
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(entry)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        XCTAssertEqual(try decoder.decode(StickerEntry.self, from: data), entry)
+    }
+
+    func testDefaultsToNotFavorited() {
+        let entry = StickerEntry(id: "1", name: "a", source: .pasted,
+                                 addedAt: Date(), useCount: 0)
+        XCTAssertNil(entry.favoritedAt)
+    }
+
+    func testManifestWrittenBeforeFavoritesStillDecodes() throws {
+        // Exactly the shape manifest.json had before this change. This is the
+        // test that protects stickers already on the user's device: Swift's
+        // synthesized Codable uses decodeIfPresent for optionals, so a missing
+        // key must decode as nil rather than throwing.
+        let legacyJSON = """
+        [{"addedAt":"2026-08-07T22:14:00Z","id":"823847191234",\
+        "name":"blobcatcozy","source":"pasted","useCount":12}]
+        """
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let entries = try decoder.decode([StickerEntry].self,
+                                         from: Data(legacyJSON.utf8))
+
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].id, "823847191234")
+        XCTAssertEqual(entries[0].useCount, 12)
+        XCTAssertNil(entries[0].favoritedAt)
+    }
 }

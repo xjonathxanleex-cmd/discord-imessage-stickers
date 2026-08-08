@@ -2,6 +2,7 @@ import UIKit
 import Messages
 
 public enum StickerFilter: Equatable {
+    case favorites
     case recents
     case all
     case search(String)
@@ -15,9 +16,26 @@ public final class StickerGridViewController: UIViewController {
     private let store: StickerStore
     private var entries: [StickerEntry] = []
     private var collectionView: UICollectionView!
+    private let emptyLabel = UILabel()
 
     public var filter: StickerFilter = .all {
         didSet { if filter != oldValue { reload() } }
+    }
+
+    /// While editing, cells show a star and an ×, and `MSStickerView`
+    /// interaction is off — sending and dragging are disabled for the
+    /// duration rather than competing with the edit controls for gestures.
+    ///
+    /// Named `isEditingStickers`, not `isEditing`: `UIViewController` already
+    /// declares a settable `isEditing` tied to its `editButtonItem` and
+    /// `setEditing(_:animated:)` machinery, none of which this app uses. A
+    /// plain `var isEditing` therefore fails to compile, and overriding it
+    /// would let UIKit flip this app's edit mode through a path nobody here
+    /// is watching.
+    public var isEditingStickers: Bool = false {
+        didSet {
+            if isEditingStickers != oldValue { collectionView?.reloadData() }
+        }
     }
 
     public init(store: StickerStore) {
@@ -54,15 +72,41 @@ public final class StickerGridViewController: UIViewController {
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
 
+        // Wording must not assume the drawer is expanded: Edit is unreachable
+        // from compact mode, so "tap Edit" alone would refer to a button the
+        // reader cannot see. It also must not describe an action that is
+        // impossible from this tab: the Favorites grid is empty precisely
+        // when this label is showing, so "star any sticker" needs an
+        // explicit "switch tabs first" step or there is nothing to star.
+        emptyLabel.text = "No favorites yet. Open the All tab, "
+            + "tap Edit, then tap the star on any sticker."
+        emptyLabel.font = .preferredFont(forTextStyle: .footnote)
+        emptyLabel.textColor = .secondaryLabel
+        emptyLabel.textAlignment = .center
+        emptyLabel.numberOfLines = 0
+        emptyLabel.isHidden = true
+        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(emptyLabel)
+        NSLayoutConstraint.activate([
+            emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            emptyLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor,
+                                                constant: 24),
+            emptyLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor,
+                                                 constant: -24),
+        ])
+
         reload()
     }
 
     public func reload() {
         switch filter {
-        case .recents: entries = store.recents()
-        case .all:     entries = store.all()
+        case .favorites: entries = store.favorites()
+        case .recents:   entries = store.recents()
+        case .all:       entries = store.all()
         case .search(let query): entries = store.search(query)
         }
+        emptyLabel.isHidden = !(entries.isEmpty && filter == .favorites)
         collectionView?.reloadData()
     }
 }
@@ -91,9 +135,24 @@ extension StickerGridViewController: UICollectionViewDataSource {
             contentsOfFileURL: store.fileURL(for: entry.id),
             localizedDescription: entry.name
         ) {
-            cell.configure(with: sticker) { [weak self] in
-                self?.store.recordUse(id: entry.id)
-            }
+            cell.configure(
+                with: sticker,
+                isFavorite: entry.favoritedAt != nil,
+                isEditing: isEditingStickers,
+                onTap: { [weak self] in
+                    self?.store.recordUse(id: entry.id)
+                },
+                onToggleFavorite: { [weak self] in
+                    guard let self else { return }
+                    self.store.setFavorite(entry.favoritedAt == nil, id: entry.id)
+                    self.reload()
+                },
+                onDelete: { [weak self] in
+                    guard let self else { return }
+                    try? self.store.delete(id: entry.id)
+                    self.reload()
+                }
+            )
         }
         return cell
     }
