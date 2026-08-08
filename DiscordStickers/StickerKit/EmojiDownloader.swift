@@ -171,13 +171,22 @@ public final class EmojiDownloader: Sendable {
 
         // Fewer than two frames is not animation; normalize returns nil and
         // the source is stored as an ordinary static sticker.
-        guard AnimatedStickerProcessor.frameCount(of: raw) >= 2 else {
+        let actualFrameCount = AnimatedStickerProcessor.frameCount(of: raw)
+        guard actualFrameCount >= 2 else {
             return process(emoji, raw: raw, animated: false)
         }
 
+        // Rung 2's budget is capped by the source's actual frame count, not
+        // just `maxAnimatedFrames`. `normalize` is a no-op whenever the
+        // source has fewer frames than the cap, so for a short source
+        // `maxAnimatedFrames / 2` alone could equal rung 1's effective frame
+        // count, making rung 2 a byte-identical re-encode of rung 1 — a full
+        // decode/render/re-encode for nothing on the memory-critical path.
+        let rung2Frames = min(StickerLimits.maxAnimatedFrames, actualFrameCount) / 2
+
         let attempts: [(canvas: Int, frames: Int)] = [
             (StickerLimits.animatedCanvasSize, StickerLimits.maxAnimatedFrames),
-            (StickerLimits.animatedCanvasSize, StickerLimits.maxAnimatedFrames / 2),
+            (StickerLimits.animatedCanvasSize, rung2Frames),
             (StickerLimits.minDimension, StickerLimits.maxAnimatedFrames / 2),
         ]
 
@@ -198,6 +207,13 @@ public final class EmojiDownloader: Sendable {
     /// in `cellForItemAt` is what turns a scroll-time crash into a
     /// download-time skip, and is what upholds the manifest invariant.
     private func commit(_ emoji: ParsedEmoji, data: Data, animated: Bool) -> ItemResult {
+        // Hardcodes ".png": `MSSticker` resolves conformance (PNG/GIF/JPEG)
+        // from the path extension, so GIF bytes written here would fail
+        // construction. APNG output legitimately keeps this extension, which
+        // is why animated output stays PNG-family for now. If animated
+        // output ever switches to GIF, this must change together with
+        // `StickerStore.fileURL(for:)` and the `pathExtension == "png"`
+        // filter in `StickerStore.rebuildFromImages`.
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(emoji.id)-\(UUID().uuidString).png")
 
