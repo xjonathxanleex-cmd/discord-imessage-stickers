@@ -25,17 +25,44 @@ public enum StickerLimits {
 
     /// Side length of the square canvas animated stickers are rendered onto.
     ///
-    /// Smaller than `canvasSize` because animated stickers pay for canvas
-    /// area in **file bytes as well as memory**, once per frame. A measured
-    /// Discord emoji is 76x61 with 94 frames at 157 KB; scaling that to the
-    /// static 256 canvas multiplies pixel area ~14x across every frame,
-    /// which is megabytes against a 500 KB ceiling.
-    public static let animatedCanvasSize = 128
+    /// Matches `canvasSize`. It was 128 while animated stickers were encoded
+    /// as APNG, which made them render at half the size of static ones in a
+    /// conversation — visibly, and the first thing device testing found.
+    ///
+    /// 256 became affordable by encoding as GIF instead. Measured on real
+    /// 7TV emotes, APNG costs **3-4x** the bytes of GIF for identical content,
+    /// because it stores full RGBA per frame while GIF palettizes and
+    /// LZW-compresses. That premium bought nothing here: every animated source
+    /// this app ingests — Discord's CDN and 7TV's alike — **is already a GIF**,
+    /// so re-encoding to APNG paid four times over to store colours and alpha
+    /// the source never had.
+    ///
+    /// | Emote | APNG (old) | GIF (now) |
+    /// |---|---|---|
+    /// | AlienDance, 66 frames | 128px, 48 frames | 256px, 64 frames |
+    /// | WAYTOODANK, 75 frames | 128px, 48 frames | 256px, 32 frames |
+    /// | BillyApprove, 90 frames | 128px, **24** frames | 192px, 32 frames |
+    public static let animatedCanvasSize = 256
+
+    /// Used when a rung at `animatedCanvasSize` still exceeds `maxBytes`.
+    public static let midAnimatedCanvasSize = 192
+
+    /// Fallback canvas for animated stickers whose frame count is punishing.
+    public static let smallAnimatedCanvasSize = 128
 
     /// Frames beyond this are dropped evenly, with their delays redistributed
-    /// so total loop duration is unchanged. 48 keeps motion smooth to the eye
-    /// while roughly halving the measured 94-frame case.
-    public static let maxAnimatedFrames = 48
+    /// so total loop duration is unchanged.
+    ///
+    /// Raised from 48 with the move to GIF. Real 7TV emotes commonly run
+    /// **41-90 frames**, so a 48-frame cap was visibly dropping motion on the
+    /// majority of animated emotes — the second thing device testing found.
+    public static let maxAnimatedFrames = 64
+
+    /// The reduced frame budget used by the lower rungs of the ladder.
+    public static let reducedAnimatedFrames = 32
+
+    /// Last resort before an animated sticker is rejected outright.
+    public static let minAnimatedFrames = 16
 
     public static let recentsLimit = 16
     public static let downloadConcurrency = 5

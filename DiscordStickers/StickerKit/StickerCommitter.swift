@@ -22,7 +22,10 @@ public enum StickerCommitter {
         data: Data,
         to store: StickerStore
     ) -> Bool {
-        // ".png" here is part of a three-way coupling: `StickerStore.fileURL`
+        // ".png" is the storage name for every sticker, not a format claim:
+        // `MSSticker` sniffs content rather than reading the extension (see
+        // StickerFormatTests), so animated stickers carry GIF bytes here.
+        // Still a three-way coupling on the *name*: `StickerStore.fileURL`
         // hardcodes the same extension, and `rebuildFromImages` filters on
         // it when recovering from a missing or corrupt manifest. All three
         // rely on animated output staying PNG-family (APNG); if that ever

@@ -148,12 +148,32 @@ final class StickerEntryTests: XCTestCase {
                                     StickerLimits.minDimension)
         XCTAssertLessThanOrEqual(StickerLimits.animatedCanvasSize,
                                  StickerLimits.maxDimension)
-        // Animated stickers pay for canvas size in file bytes as well as
-        // memory, once per frame — so their canvas must be smaller than the
-        // static one, not merely valid.
-        XCTAssertLessThan(StickerLimits.animatedCanvasSize,
-                          StickerLimits.canvasSize)
-        XCTAssertGreaterThan(StickerLimits.maxAnimatedFrames, 1)
+        // This used to assert animatedCanvasSize < canvasSize, on the ground
+        // that animated stickers pay for canvas area once per frame. True of
+        // APNG; false once the encoder moved to GIF, which costs 3-4x less for
+        // the same content. The old assertion was what forced animated
+        // stickers to render at half the size of static ones in a
+        // conversation, so it is now the reverse: they must match, and there
+        // is no reason for animated ever to exceed static.
+        XCTAssertEqual(StickerLimits.animatedCanvasSize, StickerLimits.canvasSize,
+                       "animated stickers must not render smaller than static ones")
+
+        // The fallback ladder must actually descend, or a lower rung would
+        // re-encode something no smaller and the retry would be wasted work on
+        // the memory-critical path.
+        XCTAssertLessThan(StickerLimits.midAnimatedCanvasSize,
+                          StickerLimits.animatedCanvasSize)
+        XCTAssertLessThan(StickerLimits.smallAnimatedCanvasSize,
+                          StickerLimits.midAnimatedCanvasSize)
+        XCTAssertGreaterThanOrEqual(StickerLimits.smallAnimatedCanvasSize,
+                                    StickerLimits.minDimension)
+
+        XCTAssertLessThan(StickerLimits.reducedAnimatedFrames,
+                          StickerLimits.maxAnimatedFrames)
+        XCTAssertLessThan(StickerLimits.minAnimatedFrames,
+                          StickerLimits.reducedAnimatedFrames)
+        XCTAssertGreaterThan(StickerLimits.minAnimatedFrames, 1,
+                             "fewer than two frames is not animation")
     }
 
     func testAllStickerSourcesRoundTripThroughJSON() throws {

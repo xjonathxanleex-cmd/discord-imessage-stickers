@@ -204,23 +204,41 @@ public final class EmojiDownloader: Sendable {
             return process(emoji, raw: raw, animated: false)
         }
 
-        // Rung 2's budget is capped by the source's actual frame count, not
-        // just `maxAnimatedFrames`. `normalize` is a no-op whenever the
-        // source has fewer frames than the cap, so for a short source
-        // `maxAnimatedFrames / 2` alone could equal rung 1's effective frame
-        // count, making rung 2 a byte-identical re-encode of rung 1 — a full
-        // decode/render/re-encode for nothing on the memory-critical path.
-        let rung2Frames = min(StickerLimits.maxAnimatedFrames, actualFrameCount) / 2
-
+        // Canvas is surrendered before frames, and only one step at a time.
+        // Both were being surrendered at once before: every animated sticker
+        // landed at 128px regardless, and heavy emotes lost three quarters of
+        // their frames. Measured against real 7TV emotes, this ladder puts a
+        // 66-frame emote at 256px/64 frames where it used to get 128px/48.
         let attempts: [(canvas: Int, frames: Int)] = [
-            (StickerLimits.animatedCanvasSize, StickerLimits.maxAnimatedFrames),
-            (StickerLimits.animatedCanvasSize, rung2Frames),
-            (StickerLimits.minDimension, StickerLimits.maxAnimatedFrames / 2),
+            (StickerLimits.animatedCanvasSize,      StickerLimits.maxAnimatedFrames),
+            (StickerLimits.animatedCanvasSize,      StickerLimits.reducedAnimatedFrames),
+            (StickerLimits.midAnimatedCanvasSize,   StickerLimits.reducedAnimatedFrames),
+            (StickerLimits.smallAnimatedCanvasSize, StickerLimits.reducedAnimatedFrames),
+            (StickerLimits.smallAnimatedCanvasSize, StickerLimits.minAnimatedFrames),
         ]
 
+        // Skips any rung that would re-encode byte-for-byte what the previous
+        // one already produced. `normalize` caps rather than resamples, so for
+        // a source with fewer frames than the cap two rungs differing only in
+        // frame budget are identical — and each wasted rung is a full
+        // decode/render/re-encode on the memory-critical path.
+        var lastAttempted: (canvas: Int, frames: Int)?
+
         for attempt in attempts {
+            let effective = (canvas: attempt.canvas,
+                             frames: min(attempt.frames, actualFrameCount))
+            if let last = lastAttempted, last == effective { continue }
+            lastAttempted = effective
+
             guard let encoded = AnimatedStickerProcessor.normalize(
-                raw, canvas: attempt.canvas, maxFrames: attempt.frames
+                raw, canvas: attempt.canvas, maxFrames: attempt.frames,
+                // GIF, not APNG. See StickerLimits.animatedCanvasSize: every
+                // animated source here is already a GIF, so APNG cost 3-4x the
+                // bytes to store nothing extra. MSSticker resolves format by
+                // sniffing content, not by path extension — verified in
+                // StickerFormatTests — so the stored filename stays `.png`
+                // and no migration is needed for stickers already on disk.
+                asGIF: true
             ) else { return .unusable(emoji.id) }
 
             if encoded.count <= StickerLimits.maxBytes {

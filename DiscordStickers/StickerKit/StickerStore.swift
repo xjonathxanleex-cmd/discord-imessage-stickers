@@ -70,7 +70,13 @@ public final class StickerStore: @unchecked Sendable {
         }
     }
 
-    // Hardcodes ".png": `MSSticker` resolves conformance (PNG/GIF/JPEG) from
+    // Hardcodes ".png" as the storage name for every sticker, animated or
+    // not. This is NOT a format claim: `MSSticker` resolves conformance by
+    // sniffing content, not from the path extension — see StickerFormatTests
+    // — so animated stickers hold GIF bytes under a .png name quite happily.
+    // Keeping one extension is what let the APNG-to-GIF switch ship without
+    // migrating files already on users' phones.
+    // Previously this comment asserted the opposite; it was wrong. Cross-refs:
     // the path extension, so GIF bytes stored here would fail construction.
     // APNG output legitimately keeps this extension, which is why animated
     // output stays PNG-family for now. If animated output ever switches to
