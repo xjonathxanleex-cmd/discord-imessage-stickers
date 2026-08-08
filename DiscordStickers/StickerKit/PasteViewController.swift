@@ -1,4 +1,6 @@
 import UIKit
+import PhotosUI
+import UniformTypeIdentifiers
 
 /// The paste button, plus the one-line summary of what a batch did.
 ///
@@ -21,6 +23,7 @@ public final class PasteViewController: UIViewController {
     private let exportButton = UIButton(type: .system)
     private let importButton = UIButton(type: .system)
     private let linkButton = UIButton(type: .system)
+    private let photoButton = UIButton(type: .system)
 
     /// Guards against a second tap starting a second fetch while the first
     /// is still in flight. Without this, UIKit silently drops the second
@@ -67,7 +70,12 @@ public final class PasteViewController: UIViewController {
         linkButton.addTarget(self, action: #selector(linkTapped),
                              for: .touchUpInside)
 
-        let buttons = UIStackView(arrangedSubviews: [linkButton, exportButton, importButton])
+        photoButton.setTitle("Add Photos", for: .normal)
+        photoButton.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
+        photoButton.addTarget(self, action: #selector(photosTapped),
+                              for: .touchUpInside)
+
+        let buttons = UIStackView(arrangedSubviews: [linkButton, photoButton, exportButton, importButton])
         buttons.axis = .horizontal
         buttons.spacing = 16
 
@@ -235,6 +243,56 @@ public final class PasteViewController: UIViewController {
         }
     }
 
+    @objc private func photosTapped() {
+        var configuration = PHPickerConfiguration()
+        configuration.filter = .images
+        configuration.selectionLimit = 0        // unlimited
+        configuration.preferredAssetRepresentationMode = .current
+
+        let picker = PHPickerViewController(configuration: configuration)
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    /// Loads every picked item's raw data, preserving the order the user
+    /// chose. `loadDataRepresentation` gives the original bytes rather than a
+    /// decoded `UIImage`, which is what lets `PhotoDraftLoader` downsample
+    /// before anything is decoded at full resolution.
+    private func loadImageData(
+        from results: [PHPickerResult]
+    ) async -> [Data] {
+        await withTaskGroup(of: (Int, Data?).self) { group in
+            for (index, result) in results.enumerated() {
+                group.addTask {
+                    let provider = result.itemProvider
+                    guard provider.hasItemConformingToTypeIdentifier(
+                        UTType.image.identifier
+                    ) else { return (index, nil) }
+
+                    // This SDK does not expose the async overload of
+                    // `loadDataRepresentation(for:)`, only the
+                    // completion-handler form, so it's wrapped in
+                    // `withCheckedContinuation` rather than switching to
+                    // `loadObject(ofClass: UIImage.self)`, which would decode
+                    // the image at full resolution and defeat the
+                    // downsampling this whole feature depends on.
+                    let data: Data? = await withCheckedContinuation { continuation in
+                        provider.loadDataRepresentation(for: .image) { data, _ in
+                            continuation.resume(returning: data)
+                        }
+                    }
+                    return (index, data)
+                }
+            }
+
+            var loaded: [(Int, Data)] = []
+            for await (index, data) in group {
+                if let data { loaded.append((index, data)) }
+            }
+            return loaded.sorted { $0.0 < $1.0 }.map(\.1)
+        }
+    }
+
     private func message(for error: DraftFetchError) -> String {
         switch error {
         case .unreachable: return "Couldn't fetch that link."
@@ -264,5 +322,35 @@ public final class PasteViewController: UIViewController {
         }
 
         present(navigation, animated: true)
+    }
+}
+
+extension PasteViewController: PHPickerViewControllerDelegate {
+
+    public func picker(_ picker: PHPickerViewController,
+                       didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+
+        guard !results.isEmpty else { return }   // cancelled
+
+        spinner.startAnimating()
+        statusLabel.text = "Loading \(results.count) "
+            + (results.count == 1 ? "photo…" : "photos…")
+
+        Task { [weak self] in
+            guard let self else { return }
+            let data = await self.loadImageData(from: results)
+
+            await MainActor.run {
+                self.spinner.stopAnimating()
+
+                let drafts = PhotoDraftLoader.drafts(from: data)
+                guard !drafts.isEmpty else {
+                    self.statusLabel.text = "Couldn't read those photos."
+                    return
+                }
+                self.presentReview(for: drafts)
+            }
+        }
     }
 }
