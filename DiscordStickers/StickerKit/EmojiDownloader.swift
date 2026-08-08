@@ -206,36 +206,13 @@ public final class EmojiDownloader: Sendable {
     /// hands the file to the store. Constructing the sticker here rather than
     /// in `cellForItemAt` is what turns a scroll-time crash into a
     /// download-time skip, and is what upholds the manifest invariant.
+    ///
+    /// Delegates to `StickerCommitter`, the shared implementation of that
+    /// invariant, so this and any other import path can't drift apart.
     private func commit(_ emoji: ParsedEmoji, data: Data, animated: Bool) -> ItemResult {
-        // Hardcodes ".png": `MSSticker` resolves conformance (PNG/GIF/JPEG)
-        // from the path extension, so GIF bytes written here would fail
-        // construction. APNG output legitimately keeps this extension, which
-        // is why animated output stays PNG-family for now. If animated
-        // output ever switches to GIF, this must change together with
-        // `StickerStore.fileURL(for:)` and the `pathExtension == "png"`
-        // filter in `StickerStore.rebuildFromImages`.
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(emoji.id)-\(UUID().uuidString).png")
-
-        do {
-            try data.write(to: tempURL)
-
-            // Dimensions are guaranteed by the square canvas, so this is a
-            // cheap assertion rather than a real gate. Constructing the
-            // MSSticker below is the decisive check.
-            _ = try MSSticker(contentsOfFileURL: tempURL,
-                              localizedDescription: emoji.name)
-
-            try store.add(
-                StickerEntry(id: emoji.id, name: emoji.name, source: .pasted,
-                             addedAt: Date(), useCount: 0, favoritedAt: nil,
-                             isAnimated: animated),
-                movingFileFrom: tempURL
-            )
-            return .added(emoji.id)
-        } catch {
-            try? FileManager.default.removeItem(at: tempURL)
-            return .unusable(emoji.id)
-        }
+        StickerCommitter.commit(
+            id: emoji.id, name: emoji.name, source: .pasted,
+            isAnimated: animated, data: data, to: store
+        ) ? .added(emoji.id) : .unusable(emoji.id)
     }
 }

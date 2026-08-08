@@ -75,7 +75,7 @@ public final class StickerStore: @unchecked Sendable {
     // APNG output legitimately keeps this extension, which is why animated
     // output stays PNG-family for now. If animated output ever switches to
     // GIF, this must change together with the temp file name in
-    // `EmojiDownloader.commit` and the `pathExtension == "png"` filter in
+    // `StickerCommitter.commit` and the `pathExtension == "png"` filter in
     // `rebuildFromImages` below.
     public func fileURL(for id: String) -> URL {
         imagesDirectory.appendingPathComponent("\(id).png")
@@ -226,7 +226,7 @@ public final class StickerStore: @unchecked Sendable {
         // output legitimately keeps this extension, which is why animated
         // output stays PNG-family for now. If animated output ever switches
         // to GIF, this must change together with the temp file name in
-        // `EmojiDownloader.commit` and `fileURL(for:)` above.
+        // `StickerCommitter.commit` and `fileURL(for:)` above.
         return files
             .filter { $0.pathExtension == "png" }
             .map { file in

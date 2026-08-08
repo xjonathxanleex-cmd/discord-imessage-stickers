@@ -193,4 +193,30 @@ final class ManifestTransferTests: XCTestCase {
         XCTAssertTrue(requestedPaths.contains("111.gif"))
         XCTAssertFalse(requestedPaths.contains("111.png"))
     }
+
+    func testRestoreDoesNotRequestContentHashedStickersFromDiscord() async throws {
+        // A `sha256-…` id names a link or photo import: bytes that only
+        // ever existed on this device. Requesting it from Discord's CDN
+        // would hit an object that never existed there, and the 404 would
+        // misleadingly read as "Discord deleted this" rather than "this
+        // was never recoverable."
+        StubURLProtocol.handler = { _ in (200, self.pngData()) }
+
+        let entries = [
+            StickerEntry(id: "111", name: "wave", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 1000), useCount: 0),
+            StickerEntry(id: "sha256-abcdef0123456789", name: "link import",
+                         source: .link,
+                         addedAt: Date(timeIntervalSince1970: 2000), useCount: 0),
+        ]
+
+        let outcome = await ManifestTransfer.restore(
+            entries, store: store, downloader: makeDownloader()
+        )
+
+        XCTAssertEqual(StubURLProtocol.requestedURLs.count, 1,
+                       "expected exactly one request, for the Discord entry only")
+        XCTAssertEqual(StubURLProtocol.requestedURLs.first?.lastPathComponent, "111.png")
+        XCTAssertTrue(outcome.missing.contains("sha256-abcdef0123456789"))
+    }
 }

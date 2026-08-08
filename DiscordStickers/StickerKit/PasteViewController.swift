@@ -20,6 +20,12 @@ public final class PasteViewController: UIViewController {
 
     private let exportButton = UIButton(type: .system)
     private let importButton = UIButton(type: .system)
+    private let linkButton = UIButton(type: .system)
+
+    /// Guards against a second tap starting a second fetch while the first
+    /// is still in flight. Without this, UIKit silently drops the second
+    /// `present(_:)` call and that draft is lost with no error shown.
+    private var isFetchingLink = false
 
     public init(store: StickerStore, downloader: EmojiDownloader) {
         self.store = store
@@ -56,7 +62,12 @@ public final class PasteViewController: UIViewController {
         importButton.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
         importButton.addTarget(self, action: #selector(importTapped), for: .touchUpInside)
 
-        let buttons = UIStackView(arrangedSubviews: [exportButton, importButton])
+        linkButton.setTitle("Paste Link", for: .normal)
+        linkButton.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
+        linkButton.addTarget(self, action: #selector(linkTapped),
+                             for: .touchUpInside)
+
+        let buttons = UIStackView(arrangedSubviews: [linkButton, exportButton, importButton])
         buttons.axis = .horizontal
         buttons.spacing = 16
 
@@ -181,5 +192,77 @@ public final class PasteViewController: UIViewController {
                 onFinished?(outcome)
             }
         }
+    }
+
+    /// Reads the clipboard directly, which triggers the system "Allow Paste?"
+    /// alert. Acceptable here for the same reason Restore accepts it: this is
+    /// an occasional action, not the app's core loop.
+    @objc private func linkTapped() {
+        guard !isFetchingLink else { return }
+
+        guard let text = UIPasteboard.general.string,
+              let link = LinkParser.parse(text) else {
+            statusLabel.text = "That doesn't look like a link."
+            return
+        }
+
+        // Checked before any network work so the paste isn't consumed for
+        // nothing — the user can simply paste again once they're back
+        // online. Same guard and message as the emoji paste flow.
+        guard NetworkReachability.isLikelyOnline else {
+            statusLabel.text = "You're offline — paste again when you're back."
+            return
+        }
+
+        isFetchingLink = true
+        spinner.startAnimating()
+        statusLabel.text = "Fetching…"
+
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await DraftFetcher().fetch(link)
+
+            await MainActor.run {
+                self.isFetchingLink = false
+                self.spinner.stopAnimating()
+                switch result {
+                case .failure(let error):
+                    self.statusLabel.text = self.message(for: error)
+                case .success(let draft):
+                    self.presentReview(for: [draft])
+                }
+            }
+        }
+    }
+
+    private func message(for error: DraftFetchError) -> String {
+        switch error {
+        case .unreachable: return "Couldn't fetch that link."
+        case .tooLarge:    return "That image is too large."
+        case .notAnImage:  return "That link isn't an image."
+        }
+    }
+
+    @MainActor
+    private func presentReview(for drafts: [StickerDraft]) {
+        let review = StickerReviewViewController(drafts: drafts, store: store)
+        let navigation = UINavigationController(rootViewController: review)
+        // A swipe-down must not be able to bypass `onFinished` entirely —
+        // that would skip both the cancelled-status update and any eventual
+        // outcome reporting.
+        navigation.isModalInPresentation = true
+
+        review.onFinished = { [weak self, weak navigation] outcome in
+            navigation?.dismiss(animated: true)
+            guard let self else { return }
+            guard let outcome else {
+                self.statusLabel.text = "Cancelled."
+                return
+            }
+            self.statusLabel.text = Self.summary(for: outcome)
+            self.onFinished?(outcome)
+        }
+
+        present(navigation, animated: true)
     }
 }

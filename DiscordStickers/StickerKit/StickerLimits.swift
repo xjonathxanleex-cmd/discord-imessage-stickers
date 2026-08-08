@@ -39,4 +39,10 @@ public enum StickerLimits {
 
     public static let recentsLimit = 16
     public static let downloadConcurrency = 5
+
+    /// Hard ceiling on either dimension of a fetched image, checked from
+    /// metadata before anything is decoded. A byte cap does not bound a
+    /// bitmap: flat artwork at 8000x6000 compresses under 10 MB and decodes
+    /// to ~192 MB, past the window where the extension is killed.
+    public static let maxSourcePixelDimension = 4096
 }
