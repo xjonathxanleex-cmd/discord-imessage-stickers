@@ -1,4 +1,5 @@
 import UIKit
+import ImageIO
 
 public enum DraftFetchError: Equatable, Error {
     case unreachable
@@ -28,10 +29,10 @@ public final class DraftFetcher: Sendable {
         var request = URLRequest(url: link.url)
         request.timeoutInterval = 15
 
-        let data: Data
+        let stream: URLSession.AsyncBytes
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (stream, response) = try await session.bytes(for: request)
         } catch {
             return .failure(.unreachable)
         }
@@ -40,22 +41,97 @@ public final class DraftFetcher: Sendable {
               (200..<300).contains(http.statusCode)
         else { return .failure(.unreachable) }
 
-        guard data.count <= Self.maxDownloadBytes else {
+        // Check the advertised length first — a well-behaved server lets us
+        // refuse before transferring anything at all.
+        if http.expectedContentLength > 0,
+           http.expectedContentLength > Int64(Self.maxDownloadBytes) {
             return .failure(.tooLarge)
         }
 
-        // The bytes decide, not the Content-Type header — plenty of servers
-        // label images wrongly, and a wrong label should not lose a sticker.
-        guard UIImage(data: data) != nil else {
+        // Then enforce it against reality, since Content-Length is a claim.
+        // Streaming and checking as bytes arrive is what keeps a 300 MB
+        // response from ever being fully resident — the whole body is never
+        // buffered before the cap is checked.
+        var data = Data()
+        data.reserveCapacity(min(Int(max(http.expectedContentLength, 0)),
+                                 Self.maxDownloadBytes))
+        do {
+            for try await byte in stream {
+                data.append(byte)
+                if data.count > Self.maxDownloadBytes {
+                    return .failure(.tooLarge)
+                }
+            }
+        } catch {
+            return .failure(.unreachable)
+        }
+
+        // Dimensions decide from metadata alone, before anything is decoded.
+        // A byte cap does not bound a bitmap: flat artwork at 8000x6000
+        // compresses under 10 MB and decodes to ~192 MB, past the window
+        // where the extension is killed. The bytes decide, not the
+        // Content-Type header — plenty of servers label images wrongly, and
+        // a wrong label should not lose a sticker.
+        guard let dimensions = Self.pixelDimensions(of: data) else {
             return .failure(.notAnImage)
+        }
+        guard dimensions.width <= StickerLimits.maxSourcePixelDimension,
+              dimensions.height <= StickerLimits.maxSourcePixelDimension
+        else {
+            return .failure(.tooLarge)
+        }
+
+        // Animated drafts are left untouched — AnimatedStickerProcessor
+        // already streams one frame at a time, and the dimension check above
+        // bounds a single frame. Static drafts are downsampled here, at
+        // decode time, so the full-resolution bitmap this byte cap was
+        // supposed to bound is never actually materialized downstream.
+        let imageData: Data
+        if !link.isAnimated,
+           max(dimensions.width, dimensions.height) > StickerLimits.maxDimension,
+           let downsampled = Self.downsampled(data, maxPixel: StickerLimits.maxDimension) {
+            imageData = downsampled
+        } else {
+            imageData = data
         }
 
         return .success(StickerDraft(
-            sourceURL: link.url,
             name: link.suggestedName,
-            imageData: data,
+            imageData: imageData,
             origin: .link,
             isAnimated: link.isAnimated
         ))
+    }
+
+    /// Reads pixel dimensions from image metadata only — nothing is decoded.
+    /// Returns `nil` when the bytes aren't a decodable image or carry no
+    /// dimensions, which `fetch` treats as `.notAnImage`.
+    private static func pixelDimensions(of data: Data) -> (width: Int, height: Int)? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+                as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int
+        else { return nil }
+        return (width, height)
+    }
+
+    /// Decodes directly to the target size using ImageIO's thumbnail path, so
+    /// the full-resolution bitmap is never materialized. This is what makes
+    /// the byte cap actually bound memory.
+    private static func downsampled(_ data: Data, maxPixel: Int) -> Data? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil)
+        else { return nil }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+        ]
+        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(
+            source, 0, options as CFDictionary
+        ) else { return nil }
+
+        return UIImage(cgImage: thumbnail).pngData()
     }
 }

@@ -1,4 +1,5 @@
 import UIKit
+import ImageIO
 
 /// Lets the user name imports before anything is stored.
 ///
@@ -128,14 +129,35 @@ private final class DraftCell: UITableViewCell, UITextFieldDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
+    /// 44pt at 4x — the largest scale this thumbnail will ever be drawn at.
+    private static let thumbnailMaxPixel = 176
+
     func configure(with draft: StickerDraft,
                    onNameChanged: @escaping (String) -> Void) {
-        // A thumbnail of one pending import, not a collection — the memory
-        // discipline that governs the sticker grid does not apply to a
-        // short review list.
-        thumbnail.image = UIImage(data: draft.imageData)
+        // Decoded at thumbnail size via ImageIO rather than
+        // `UIImage(data:)`, which would decode the source at full
+        // resolution just to display it in a 44x44 image view. A single
+        // draft is a small cost, but a flat-artwork import can still be
+        // megapixels, and there's no reason to pay for that here.
+        thumbnail.image = Self.thumbnail(for: draft.imageData)
         nameField.text = draft.name
         self.onNameChanged = onNameChanged
+    }
+
+    private static func thumbnail(for data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil)
+        else { return nil }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: thumbnailMaxPixel,
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(
+            source, 0, options as CFDictionary
+        ) else { return nil }
+
+        return UIImage(cgImage: cgImage)
     }
 
     override func prepareForReuse() {
