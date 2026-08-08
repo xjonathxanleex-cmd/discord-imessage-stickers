@@ -23,9 +23,30 @@ final class MessagesViewController: MSMessagesAppViewController {
     private let searchRow = UIStackView()
     private let pasteContainer = UIView()
     private let topControls = UIStackView()
+    private var fatalLabel: UILabel?
+
+    /// False until the UI has been built, so a retry can tell "never
+    /// succeeded" from "already running" and never builds twice.
+    private var isReady = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        prepareIfNeeded()
+    }
+
+    /// Builds the UI, retrying storage setup on every attempt until it works.
+    ///
+    /// This used to run once, in `viewDidLoad`, and give up permanently on a
+    /// failed `StickerStore` init. That is a worse failure than it looks: the
+    /// view controller instance outlives any single appearance of the drawer,
+    /// so one transient failure left a dead drawer that **stayed** dead for
+    /// the life of the extension process — no amount of closing and reopening
+    /// the drawer would fix it, only force-quitting Messages.
+    ///
+    /// Called again from `willBecomeActive`, so the drawer repairs itself the
+    /// next time it is opened.
+    private func prepareIfNeeded() {
+        guard !isReady else { return }
 
         let root = FileManager.default.urls(
             for: .documentDirectory, in: .userDomainMask
@@ -34,12 +55,14 @@ final class MessagesViewController: MSMessagesAppViewController {
         do {
             store = try StickerStore(root: root)
         } catch {
-            showFatal("Couldn't open sticker storage.")
+            showFatal("Couldn't open sticker storage. Close and reopen this drawer.")
             return
         }
-        downloader = EmojiDownloader(store: store)
 
+        clearFatal()
+        downloader = EmojiDownloader(store: store)
         buildUI()
+        isReady = true
         applyPresentationStyle(presentationStyle)
     }
 
@@ -177,6 +200,14 @@ final class MessagesViewController: MSMessagesAppViewController {
         store?.flush()
     }
 
+    override func willBecomeActive(with conversation: MSConversation) {
+        super.willBecomeActive(with: conversation)
+        // Second chance for a drawer that failed to set up. Fires every time
+        // the extension becomes active, including after Messages has kept this
+        // view controller alive across a trip to another app.
+        prepareIfNeeded()
+    }
+
     override func didBecomeActive(with conversation: MSConversation) {
         super.didBecomeActive(with: conversation)
         // `recordUse` never triggers a reload on its own (reordering cells
@@ -236,8 +267,11 @@ final class MessagesViewController: MSMessagesAppViewController {
         setEditMode(StickerEditMode.mode(forScopeIndex: editScope.selectedSegmentIndex))
     }
 
+    /// Retried on every activation, so it must not stack labels.
     private func showFatal(_ message: String) {
+        if let existing = fatalLabel { existing.text = message; return }
         let label = UILabel()
+        fatalLabel = label
         label.text = message
         label.textAlignment = .center
         label.numberOfLines = 0
@@ -248,6 +282,11 @@ final class MessagesViewController: MSMessagesAppViewController {
             label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             label.widthAnchor.constraint(equalTo: view.widthAnchor, multiplier: 0.8),
         ])
+    }
+
+    private func clearFatal() {
+        fatalLabel?.removeFromSuperview()
+        fatalLabel = nil
     }
 }
 
