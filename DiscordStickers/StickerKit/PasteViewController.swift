@@ -20,6 +20,7 @@ public final class PasteViewController: UIViewController {
 
     private let exportButton = UIButton(type: .system)
     private let importButton = UIButton(type: .system)
+    private let linkButton = UIButton(type: .system)
 
     public init(store: StickerStore, downloader: EmojiDownloader) {
         self.store = store
@@ -56,7 +57,12 @@ public final class PasteViewController: UIViewController {
         importButton.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
         importButton.addTarget(self, action: #selector(importTapped), for: .touchUpInside)
 
-        let buttons = UIStackView(arrangedSubviews: [exportButton, importButton])
+        linkButton.setTitle("Paste Link", for: .normal)
+        linkButton.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
+        linkButton.addTarget(self, action: #selector(linkTapped),
+                             for: .touchUpInside)
+
+        let buttons = UIStackView(arrangedSubviews: [linkButton, exportButton, importButton])
         buttons.axis = .horizontal
         buttons.spacing = 16
 
@@ -181,5 +187,58 @@ public final class PasteViewController: UIViewController {
                 onFinished?(outcome)
             }
         }
+    }
+
+    /// Reads the clipboard directly, which triggers the system "Allow Paste?"
+    /// alert. Acceptable here for the same reason Restore accepts it: this is
+    /// an occasional action, not the app's core loop.
+    @objc private func linkTapped() {
+        guard let text = UIPasteboard.general.string,
+              let link = LinkParser.parse(text) else {
+            statusLabel.text = "That doesn't look like a link."
+            return
+        }
+
+        spinner.startAnimating()
+        statusLabel.text = "Fetching…"
+
+        Task { [weak self] in
+            guard let self else { return }
+            let result = await DraftFetcher().fetch(link)
+
+            await MainActor.run {
+                self.spinner.stopAnimating()
+                switch result {
+                case .failure(let error):
+                    self.statusLabel.text = self.message(for: error)
+                case .success(let draft):
+                    self.presentReview(for: [draft])
+                }
+            }
+        }
+    }
+
+    private func message(for error: DraftFetchError) -> String {
+        switch error {
+        case .unreachable: return "Couldn't fetch that link."
+        case .tooLarge:    return "That image is too large."
+        case .notAnImage:  return "That link isn't an image."
+        }
+    }
+
+    @MainActor
+    private func presentReview(for drafts: [StickerDraft]) {
+        let review = StickerReviewViewController(drafts: drafts, store: store)
+        let navigation = UINavigationController(rootViewController: review)
+
+        review.onFinished = { [weak self] outcome in
+            guard let self else { return }
+            navigation.dismiss(animated: true)
+            guard let outcome else { return }   // cancelled
+            self.statusLabel.text = Self.summary(for: outcome)
+            self.onFinished?(outcome)
+        }
+
+        present(navigation, animated: true)
     }
 }
