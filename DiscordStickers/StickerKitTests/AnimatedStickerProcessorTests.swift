@@ -167,4 +167,24 @@ final class AnimatedStickerProcessorTests: XCTestCase {
         XCTAssertEqual(AnimatedStickerProcessor.frameCount(of: Data()), 0)
         XCTAssertEqual(AnimatedStickerProcessor.totalDuration(of: Data()), 0)
     }
+
+    func testAnimatedOutputPreservesTransparency() throws {
+        func alphaInfoOfFirstFrame(_ data: Data) throws -> CGImageAlphaInfo {
+            let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+            let frame = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+            return frame.alphaInfo
+        }
+
+        let input = temp.makeAnimatedGIFData(frameCount: 6, opaque: false)
+        let output = try XCTUnwrap(AnimatedStickerProcessor.normalize(input))
+        XCTAssertNotEqual(try alphaInfoOfFirstFrame(output), .none)
+
+        // Extreme aspect ratio: the letterbox padding added around the
+        // drawn image must be transparent, not opaque.
+        let wideInput = temp.makeAnimatedGIFData(
+            frameCount: 6, width: 400, height: 20, opaque: false
+        )
+        let wideOutput = try XCTUnwrap(AnimatedStickerProcessor.normalize(wideInput))
+        XCTAssertNotEqual(try alphaInfoOfFirstFrame(wideOutput), .none)
+    }
 }

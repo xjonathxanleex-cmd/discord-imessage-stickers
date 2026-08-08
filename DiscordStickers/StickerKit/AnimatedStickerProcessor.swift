@@ -14,6 +14,13 @@ public enum AnimatedStickerProcessor {
     /// The de-facto default a browser applies to a zero-delay GIF frame.
     private static let fallbackDelay = 0.1
 
+    /// One surviving frame: its index in the source, and the delay it carries
+    /// after absorbing any frames dropped after it.
+    private struct KeptFrame {
+        let index: Int
+        let delay: Double
+    }
+
     /// Returns animated image data of exactly `canvas` x `canvas`, or `nil`
     /// if `data` is undecodable **or contains fewer than two frames** — a
     /// single-frame image is not animated and belongs to
@@ -30,16 +37,14 @@ public enum AnimatedStickerProcessor {
         let count = CGImageSourceGetCount(source)
         guard count >= 2 else { return nil }
 
-        var frames: [(image: CGImage, delay: Double)] = []
-        frames.reserveCapacity(count)
-        for index in 0..<count {
-            guard let image = CGImageSourceCreateImageAtIndex(source, index, nil)
-            else { continue }
-            frames.append((image, delay(of: source, at: index)))
-        }
-        guard frames.count >= 2 else { return nil }
+        // Delays come from metadata, so this costs no decoded pixels. Doing
+        // the whole frame plan up front is what lets the encode loop below
+        // hold exactly one decoded frame at a time.
+        let delays = (0..<count).map { delay(of: source, at: $0) }
+        let plan = framePlan(count: count, delays: delays, maxFrames: maxFrames)
+        guard plan.count >= 2 else { return nil }
 
-        return encode(reduce(frames, to: maxFrames), canvas: canvas, asGIF: asGIF)
+        return encode(source: source, plan: plan, canvas: canvas, asGIF: asGIF)
     }
 
     public static func frameCount(of data: Data) -> Int {
@@ -82,27 +87,28 @@ public enum AnimatedStickerProcessor {
             ?? fallbackDelay
     }
 
-    /// Samples `maxFrames` evenly across the input and folds each dropped
-    /// frame's delay into the surviving frame that precedes it.
+    /// Samples `maxFrames` indices evenly and folds each dropped frame's delay
+    /// into the surviving frame that precedes it.
     ///
     /// The delay accumulation is the part that matters. Dropping every other
     /// frame while keeping the survivors' own delays plays the loop at half
     /// speed — still smooth, silently wrong, and invisible to any assertion
     /// about frame count or file size.
-    private static func reduce(
-        _ frames: [(image: CGImage, delay: Double)],
-        to maxFrames: Int
-    ) -> [(image: CGImage, delay: Double)] {
-        guard maxFrames > 0, frames.count > maxFrames else { return frames }
+    private static func framePlan(
+        count: Int, delays: [Double], maxFrames: Int
+    ) -> [KeptFrame] {
+        guard maxFrames > 0, count > maxFrames else {
+            return (0..<count).map { KeptFrame(index: $0, delay: delays[$0]) }
+        }
 
         let kept = (0..<maxFrames).map { step in
-            Int(Double(step) * Double(frames.count) / Double(maxFrames))
+            Int(Double(step) * Double(count) / Double(maxFrames))
         }
 
         return kept.enumerated().map { position, start in
-            let end = position + 1 < kept.count ? kept[position + 1] : frames.count
-            let absorbed = frames[start..<end].reduce(0.0) { $0 + $1.delay }
-            return (frames[start].image, absorbed)
+            let end = position + 1 < kept.count ? kept[position + 1] : count
+            return KeptFrame(index: start,
+                             delay: delays[start..<end].reduce(0, +))
         }
     }
 
@@ -134,8 +140,11 @@ public enum AnimatedStickerProcessor {
         return context.makeImage()
     }
 
+    /// Decodes, renders, appends and releases one frame per iteration, so
+    /// peak decoded pixels is a single frame rather than the whole animation.
     private static func encode(
-        _ frames: [(image: CGImage, delay: Double)],
+        source: CGImageSource,
+        plan: [KeptFrame],
         canvas: Int,
         asGIF: Bool
     ) -> Data? {
@@ -143,7 +152,7 @@ public enum AnimatedStickerProcessor {
         let type = (asGIF ? UTType.gif : UTType.png).identifier as CFString
 
         guard let destination = CGImageDestinationCreateWithData(
-            output, type, frames.count, nil
+            output, type, plan.count, nil
         ) else { return nil }
 
         CGImageDestinationSetProperties(destination, (asGIF
@@ -151,8 +160,12 @@ public enum AnimatedStickerProcessor {
             : [kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGLoopCount: 0]]
         ) as CFDictionary)
 
-        for frame in frames {
-            guard let rendered = render(frame.image, canvas: canvas)
+        for frame in plan {
+            guard
+                let decoded = CGImageSourceCreateImageAtIndex(
+                    source, frame.index, nil
+                ),
+                let rendered = render(decoded, canvas: canvas)
             else { return nil }
 
             CGImageDestinationAddImage(destination, rendered, (asGIF

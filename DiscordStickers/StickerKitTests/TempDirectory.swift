@@ -36,10 +36,15 @@ final class TempDirectory {
 
     /// Builds an animated GIF in memory. Each frame is a different solid
     /// colour so frame-dropping can be observed, not just counted.
+    ///
+    /// When `opaque` is false, each frame only fills its centre half,
+    /// leaving the surrounding region transparent — so the fixture genuinely
+    /// exercises alpha rather than always producing fully-opaque frames.
     func makeAnimatedGIFData(frameCount: Int = 10,
                              width: Int = 76,
                              height: Int = 61,
-                             delay: Double = 0.05) -> Data {
+                             delay: Double = 0.05,
+                             opaque: Bool = true) -> Data {
         let out = NSMutableData()
         let destination = CGImageDestinationCreateWithData(
             out, UTType.gif.identifier as CFString, frameCount, nil
@@ -50,13 +55,21 @@ final class TempDirectory {
         ] as CFDictionary)
 
         for index in 0..<frameCount {
+            let format = UIGraphicsImageRendererFormat()
+            format.opaque = opaque
             let renderer = UIGraphicsImageRenderer(
-                size: CGSize(width: width, height: height)
+                size: CGSize(width: width, height: height), format: format
             )
             let image = renderer.image { context in
                 UIColor(hue: CGFloat(index) / CGFloat(max(frameCount, 1)),
                         saturation: 1, brightness: 1, alpha: 1).setFill()
-                context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+                if opaque {
+                    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+                } else {
+                    let centre = CGRect(x: 0, y: 0, width: width, height: height)
+                        .insetBy(dx: CGFloat(width) / 4, dy: CGFloat(height) / 4)
+                    context.fill(centre)
+                }
             }
             CGImageDestinationAddImage(destination, image.cgImage!, [
                 kCGImagePropertyGIFDictionary: [
