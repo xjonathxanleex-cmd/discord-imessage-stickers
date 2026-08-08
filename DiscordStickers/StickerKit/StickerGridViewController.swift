@@ -2,6 +2,7 @@ import UIKit
 import Messages
 
 public enum StickerFilter: Equatable {
+    case favorites
     case recents
     case all
     case search(String)
@@ -15,6 +16,7 @@ public final class StickerGridViewController: UIViewController {
     private let store: StickerStore
     private var entries: [StickerEntry] = []
     private var collectionView: UICollectionView!
+    private let emptyLabel = UILabel()
 
     public var filter: StickerFilter = .all {
         didSet { if filter != oldValue { reload() } }
@@ -54,15 +56,38 @@ public final class StickerGridViewController: UIViewController {
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
 
+        // Wording must not assume the drawer is expanded: Edit is unreachable
+        // from compact mode, so "tap Edit" alone would refer to a button the
+        // reader cannot see.
+        emptyLabel.text = "Expand this drawer, tap Edit, "
+            + "then tap the star on any sticker."
+        emptyLabel.font = .preferredFont(forTextStyle: .footnote)
+        emptyLabel.textColor = .secondaryLabel
+        emptyLabel.textAlignment = .center
+        emptyLabel.numberOfLines = 0
+        emptyLabel.isHidden = true
+        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(emptyLabel)
+        NSLayoutConstraint.activate([
+            emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            emptyLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor,
+                                                constant: 24),
+            emptyLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor,
+                                                 constant: -24),
+        ])
+
         reload()
     }
 
     public func reload() {
         switch filter {
-        case .recents: entries = store.recents()
-        case .all:     entries = store.all()
+        case .favorites: entries = store.favorites()
+        case .recents:   entries = store.recents()
+        case .all:       entries = store.all()
         case .search(let query): entries = store.search(query)
         }
+        emptyLabel.isHidden = !(entries.isEmpty && filter == .favorites)
         collectionView?.reloadData()
     }
 }
