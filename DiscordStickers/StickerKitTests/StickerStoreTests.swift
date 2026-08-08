@@ -126,4 +126,33 @@ final class StickerStoreTests: XCTestCase {
     func testEmptyRootStartsEmptyWithoutThrowing() throws {
         XCTAssertTrue(try makeStore().all().isEmpty)
     }
+
+    /// `testCorruptManifestIsQuarantinedAndImagesAreSalvaged` only checks the
+    /// salvage that happens in memory on the *second* store. If that store is
+    /// killed before it ever flushes (the documented top risk for the
+    /// extension: memory-killed before `didResignActive` fires), the salvage
+    /// must still be reachable by a *third* store reading whatever is on disk
+    /// — which at that point is still just the images, with no manifest at
+    /// all, since the second store never wrote one.
+    func testSalvagedStickersSurviveASecondLaunchWithoutFlush() throws {
+        let store = try makeStore()
+        try store.add(entry("111", name: "wave"),
+                      movingFileFrom: try temp.makePNG(named: "a.png"))
+        store.flush()
+
+        try Data("{ not json".utf8)
+            .write(to: temp.url.appendingPathComponent("manifest.json"))
+
+        // Second store: performs the salvage (quarantines the broken
+        // manifest, rebuilds from images) but is never flushed, so nothing
+        // it does reaches disk beyond the quarantine rename.
+        _ = try makeStore()
+
+        // Third store: simulates a memory kill between salvage and flush.
+        // It reads the manifest-less on-disk state left behind — which must
+        // still resolve to the salvaged entry, not an empty store.
+        let thirdStore = try makeStore()
+
+        XCTAssertEqual(thirdStore.all().map(\.id), ["111"])
+    }
 }

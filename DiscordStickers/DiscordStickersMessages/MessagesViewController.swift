@@ -74,13 +74,19 @@ final class MessagesViewController: MSMessagesAppViewController {
 
         paste.didMove(toParent: self)
 
+        // Required priority would conflict with the stack view's own
+        // required-priority zero-size constraint when pasteContainer is
+        // hidden (UISV-hiding); .defaultHigh lets that one win without any
+        // console warnings, and the layout still collapses correctly.
+        let pasteContainerHeight = pasteContainer.heightAnchor.constraint(equalToConstant: 76)
+        pasteContainerHeight.priority = .defaultHigh
+        pasteContainerHeight.isActive = true
+
         NSLayoutConstraint.activate([
             paste.view.topAnchor.constraint(equalTo: pasteContainer.topAnchor),
             paste.view.bottomAnchor.constraint(equalTo: pasteContainer.bottomAnchor),
             paste.view.leadingAnchor.constraint(equalTo: pasteContainer.leadingAnchor),
             paste.view.trailingAnchor.constraint(equalTo: pasteContainer.trailingAnchor),
-
-            pasteContainer.heightAnchor.constraint(equalToConstant: 76),
 
             topControls.topAnchor.constraint(
                 equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -130,6 +136,21 @@ final class MessagesViewController: MSMessagesAppViewController {
         // The extension can be killed without further warning; make sure no
         // manifest change is sitting in the debounce window.
         store?.flush()
+    }
+
+    override func didBecomeActive(with conversation: MSConversation) {
+        super.didBecomeActive(with: conversation)
+        // `recordUse` never triggers a reload on its own (reordering cells
+        // under the user's finger mid-tap would be worse than a stale
+        // order), so pick up any use-count changes here instead: this fires
+        // on every return to the extension, including re-expanding after the
+        // conversation view collapsed it.
+        grid?.reload()
+    }
+
+    override func didTransition(to presentationStyle: MSMessagesAppPresentationStyle) {
+        super.didTransition(to: presentationStyle)
+        grid?.reload()
     }
 
     // MARK: - Actions

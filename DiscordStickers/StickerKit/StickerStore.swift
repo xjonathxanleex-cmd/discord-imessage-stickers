@@ -9,8 +9,11 @@ import Foundation
 /// on a paid account is a change to one argument.
 ///
 /// `@unchecked Sendable` is honest here rather than a shortcut: every access
-/// to `entries` and `pendingWrite` goes through `queue`, which is serial. The
-/// compiler cannot see that invariant, but it is the class's central design
+/// to `entries` and `pendingWrite` *after initialization* goes through
+/// `queue`, which is serial. (`init` assigns `entries` directly, bypassing
+/// `queue` — that is safe only because `self` has not yet escaped the
+/// initializer, so no concurrent access is possible at that point.) The
+/// compiler cannot see this invariant, but it is the class's central design
 /// fact. If you ever add a property touched outside `queue`, this conformance
 /// becomes a lie — so don't.
 public final class StickerStore: @unchecked Sendable {
@@ -91,7 +94,7 @@ public final class StickerStore: @unchecked Sendable {
     }
 
     public func delete(id: String) throws {
-        try queue.sync {
+        queue.sync {
             entries.removeAll { $0.id == id }
             try? FileManager.default.removeItem(at: fileURL(for: id))
             scheduleWriteLocked()
@@ -140,7 +143,12 @@ public final class StickerStore: @unchecked Sendable {
     }
 
     private static func loadManifest(at url: URL, imagesDirectory: URL) -> [StickerEntry] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
+        guard let data = try? Data(contentsOf: url) else {
+            // No manifest (missing or unreadable): there is nothing to
+            // quarantine, but there may still be salvageable images on disk
+            // from an earlier launch that never got to write one out.
+            return rebuildFromImages(in: imagesDirectory)
+        }
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -156,6 +164,15 @@ public final class StickerStore: @unchecked Sendable {
         try? FileManager.default.removeItem(at: quarantine)
         try? FileManager.default.moveItem(at: url, to: quarantine)
 
+        return rebuildFromImages(in: imagesDirectory)
+    }
+
+    /// Reconstructs entries from whatever `.png` files are present, with no
+    /// manifest to consult. Names are unrecoverable, so the file's ID stands
+    /// in as its name; search is degraded until the user re-pastes. Shared by
+    /// both the missing-manifest and corrupt-manifest recovery paths so they
+    /// cannot drift apart.
+    private static func rebuildFromImages(in imagesDirectory: URL) -> [StickerEntry] {
         let files = (try? FileManager.default.contentsOfDirectory(
             at: imagesDirectory, includingPropertiesForKeys: nil
         )) ?? []
