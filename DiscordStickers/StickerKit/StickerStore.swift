@@ -1,0 +1,171 @@
+import Foundation
+
+/// Sole owner of `<root>/stickers/*.png` and `<root>/manifest.json`.
+/// All mutation is confined to a serial queue; nothing else in the app
+/// touches these paths.
+///
+/// `root` is injected rather than derived internally so that tests can point
+/// it at a temp directory, and so that moving to a shared App Group container
+/// on a paid account is a change to one argument.
+///
+/// `@unchecked Sendable` is honest here rather than a shortcut: every access
+/// to `entries` and `pendingWrite` goes through `queue`, which is serial. The
+/// compiler cannot see that invariant, but it is the class's central design
+/// fact. If you ever add a property touched outside `queue`, this conformance
+/// becomes a lie — so don't.
+public final class StickerStore: @unchecked Sendable {
+
+    private let root: URL
+    private let imagesDirectory: URL
+    private let manifestURL: URL
+    private let writeDebounce: TimeInterval
+    private let queue = DispatchQueue(label: "StickerStore")
+
+    private var entries: [StickerEntry] = []
+    private var pendingWrite: DispatchWorkItem?
+
+    public init(root: URL, writeDebounce: TimeInterval = 0.3) throws {
+        self.root = root
+        self.imagesDirectory = root.appendingPathComponent("stickers", isDirectory: true)
+        self.manifestURL = root.appendingPathComponent("manifest.json")
+        self.writeDebounce = writeDebounce
+
+        try FileManager.default.createDirectory(
+            at: imagesDirectory, withIntermediateDirectories: true
+        )
+        entries = Self.loadManifest(at: manifestURL, imagesDirectory: imagesDirectory)
+    }
+
+    // MARK: - Reads
+
+    public func all() -> [StickerEntry] {
+        queue.sync { entries }
+    }
+
+    public func contains(id: String) -> Bool {
+        queue.sync { entries.contains { $0.id == id } }
+    }
+
+    public func search(_ query: String) -> [StickerEntry] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return all() }
+        return queue.sync {
+            entries.filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+        }
+    }
+
+    public func recents(limit: Int = StickerLimits.recentsLimit) -> [StickerEntry] {
+        queue.sync {
+            entries
+                .sorted {
+                    $0.useCount != $1.useCount
+                        ? $0.useCount > $1.useCount
+                        : $0.addedAt > $1.addedAt
+                }
+                .prefix(limit)
+                .map { $0 }
+        }
+    }
+
+    public func fileURL(for id: String) -> URL {
+        imagesDirectory.appendingPathComponent("\(id).png")
+    }
+
+    // MARK: - Writes
+
+    /// Moves an already-validated temp file into the store and records it.
+    /// Adding an ID that is already present is a no-op, which is what makes
+    /// re-pasting an overlapping batch free.
+    public func add(_ entry: StickerEntry, movingFileFrom tempURL: URL) throws {
+        try queue.sync {
+            guard !entries.contains(where: { $0.id == entry.id }) else {
+                try? FileManager.default.removeItem(at: tempURL)
+                return
+            }
+            let destination = fileURL(for: entry.id)
+            try? FileManager.default.removeItem(at: destination)
+            try FileManager.default.moveItem(at: tempURL, to: destination)
+            entries.append(entry)
+            scheduleWriteLocked()
+        }
+    }
+
+    public func delete(id: String) throws {
+        try queue.sync {
+            entries.removeAll { $0.id == id }
+            try? FileManager.default.removeItem(at: fileURL(for: id))
+            scheduleWriteLocked()
+        }
+    }
+
+    public func recordUse(id: String) {
+        queue.sync {
+            guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+            entries[index].useCount += 1
+            scheduleWriteLocked()
+        }
+    }
+
+    /// Writes any pending manifest change immediately. Call before the
+    /// extension is likely to be suspended or killed.
+    public func flush() {
+        queue.sync {
+            pendingWrite?.cancel()
+            pendingWrite = nil
+            writeManifestLocked()
+        }
+    }
+
+    // MARK: - Persistence
+
+    private func scheduleWriteLocked() {
+        pendingWrite?.cancel()
+        guard writeDebounce > 0 else {
+            writeManifestLocked()
+            return
+        }
+        let work = DispatchWorkItem { [weak self] in
+            self?.writeManifestLocked()
+        }
+        pendingWrite = work
+        queue.asyncAfter(deadline: .now() + writeDebounce, execute: work)
+    }
+
+    private func writeManifestLocked() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(entries) else { return }
+        try? data.write(to: manifestURL, options: .atomic)
+    }
+
+    private static func loadManifest(at url: URL, imagesDirectory: URL) -> [StickerEntry] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        if let entries = try? decoder.decode([StickerEntry].self, from: data) {
+            return entries
+        }
+
+        // Corrupt manifest: quarantine rather than delete, then rebuild what
+        // the images alone can tell us. Names are unrecoverable, so search is
+        // degraded until the user re-pastes.
+        let quarantine = url.deletingLastPathComponent()
+            .appendingPathComponent("manifest.json.broken")
+        try? FileManager.default.removeItem(at: quarantine)
+        try? FileManager.default.moveItem(at: url, to: quarantine)
+
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: imagesDirectory, includingPropertiesForKeys: nil
+        )) ?? []
+
+        return files
+            .filter { $0.pathExtension == "png" }
+            .map { file in
+                let id = file.deletingPathExtension().lastPathComponent
+                return StickerEntry(id: id, name: id, source: .pasted,
+                                    addedAt: Date(), useCount: 0)
+            }
+    }
+}
