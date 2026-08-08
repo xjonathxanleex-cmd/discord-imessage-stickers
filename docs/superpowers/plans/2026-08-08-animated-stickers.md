@@ -148,6 +148,12 @@ public struct StickerEntry: Codable, Equatable {
     /// the CDN returns **HTTP 415** for a static emoji requested as `.gif`.
     /// Without persisting this, every animated sticker would come back
     /// static — or fail outright — after a restore.
+    ///
+    /// Unlike `favoritedAt`, this is NOT a free migration. `favoritedAt` is
+    /// optional, and synthesized `Codable` uses `decodeIfPresent` for
+    /// optionals. A non-optional `Bool` is *required* by a synthesized
+    /// `init(from:)`, which would throw on every manifest written before this
+    /// property existed. Hence the hand-written `Codable` below.
     public var isAnimated: Bool
 
     public init(id: String, name: String, source: StickerSource,
@@ -161,8 +167,40 @@ public struct StickerEntry: Codable, Equatable {
         self.favoritedAt = favoritedAt
         self.isAnimated = isAnimated
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, source, addedAt, useCount, favoritedAt, isAnimated
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        source = try container.decode(StickerSource.self, forKey: .source)
+        addedAt = try container.decode(Date.self, forKey: .addedAt)
+        useCount = try container.decode(Int.self, forKey: .useCount)
+        favoritedAt = try container.decodeIfPresent(Date.self, forKey: .favoritedAt)
+        isAnimated = try container.decodeIfPresent(Bool.self, forKey: .isAnimated) ?? false
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(source, forKey: .source)
+        try container.encode(addedAt, forKey: .addedAt)
+        try container.encode(useCount, forKey: .useCount)
+        try container.encodeIfPresent(favoritedAt, forKey: .favoritedAt)
+        // Omitted when false, so a manifest with no animated stickers stays
+        // byte-shaped exactly as it was before this feature.
+        if isAnimated {
+            try container.encode(isAnimated, forKey: .isAnimated)
+        }
+    }
 }
 ```
+
+**The hand-written `Codable` is not optional here.** `favoritedAt` migrated for free because it is an *optional* — synthesized `Codable` calls `decodeIfPresent` for those. `isAnimated` is a non-optional `Bool`, so a synthesized `init(from:)` would treat its key as **required** and throw on every manifest written before this feature. `decodeIfPresent(...) ?? false` is what makes the migration work.
 
 - [ ] **Step 4: Add the constants**
 
