@@ -18,6 +18,7 @@ final class MessagesViewController: MSMessagesAppViewController {
     private let searchBar = UISearchBar()
     private let tabs = UISegmentedControl(items: ["Favorites", "Recent", "All"])
     private let editButton = UIButton(type: .system)
+    private let deleteButton = UIButton(type: .system)
     private let searchRow = UIStackView()
     private let pasteContainer = UIView()
     private let topControls = UIStackView()
@@ -60,11 +61,18 @@ final class MessagesViewController: MSMessagesAppViewController {
         editButton.addTarget(self, action: #selector(editTapped),
                              for: .touchUpInside)
 
+        deleteButton.setTitle("Delete", for: .normal)
+        deleteButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        deleteButton.setContentHuggingPriority(.required, for: .horizontal)
+        deleteButton.addTarget(self, action: #selector(deleteTapped),
+                               for: .touchUpInside)
+
         searchRow.axis = .horizontal
         searchRow.alignment = .center
         searchRow.spacing = 8
         searchRow.addArrangedSubview(searchBar)
         searchRow.addArrangedSubview(editButton)
+        searchRow.addArrangedSubview(deleteButton)
 
         pasteContainer.translatesAutoresizingMaskIntoConstraints = false
 
@@ -91,14 +99,12 @@ final class MessagesViewController: MSMessagesAppViewController {
 
         paste.didMove(toParent: self)
 
-        // Required priority would conflict with the stack view's own
-        // required-priority zero-size constraint when pasteContainer is
-        // hidden (UISV-hiding); .defaultHigh lets that one win without any
-        // console warnings, and the layout still collapses correctly.
-        let pasteContainerHeight = pasteContainer.heightAnchor.constraint(equalToConstant: 76)
-        pasteContainerHeight.priority = .defaultHigh
-        pasteContainerHeight.isActive = true
-
+        // No fixed height here on purpose. This was 76pt, sized when the paste
+        // view held a button, a spinner and a label; Paste Link and Add Photos
+        // were appended by two later features and the container never grew, so
+        // both were clipped out of sight and the features looked unbuilt. The
+        // container now takes its height from the paste view's own content,
+        // which cannot fall out of date.
         NSLayoutConstraint.activate([
             paste.view.topAnchor.constraint(equalTo: pasteContainer.topAnchor),
             paste.view.bottomAnchor.constraint(equalTo: pasteContainer.bottomAnchor),
@@ -140,7 +146,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         pasteContainer.isHidden = !expanded
         if !expanded {
             // Never leave the drawer in a state where taps do not send.
-            setStickerEditing(false)
+            setEditMode(.off)
             searchBar.text = nil
             searchBar.resignFirstResponder()
         }
@@ -185,9 +191,15 @@ final class MessagesViewController: MSMessagesAppViewController {
         }
     }
 
-    private func setStickerEditing(_ editing: Bool) {
-        grid?.isEditingStickers = editing
-        editButton.setTitle(editing ? "Done" : "Edit", for: .normal)
+    /// Single writer for edit state. Both buttons retitle on every change, so
+    /// entering one mode visibly leaves the other — the two can never both
+    /// read as active, and there is always exactly one Done to tap.
+    private func setEditMode(_ mode: StickerEditMode) {
+        grid?.editMode = mode
+        editButton.setTitle(mode.buttonTitle(for: .favorites), for: .normal)
+        deleteButton.setTitle(mode.buttonTitle(for: .delete), for: .normal)
+        // Deleting is the destructive mode, so it says so while it is armed.
+        deleteButton.tintColor = (mode == .delete) ? .systemRed : .tintColor
     }
 
     @objc private func tabChanged() {
@@ -196,9 +208,17 @@ final class MessagesViewController: MSMessagesAppViewController {
         grid.filter = filterForSelectedTab()
     }
 
+    /// Each button toggles its own mode off, and switches directly into it
+    /// from the other — so going from favoriting to deleting is one tap, not
+    /// Done-then-Delete.
     @objc private func editTapped() {
         guard grid != nil else { return }
-        setStickerEditing(!grid.isEditingStickers)
+        setEditMode(grid.editMode == .favorites ? .off : .favorites)
+    }
+
+    @objc private func deleteTapped() {
+        guard grid != nil else { return }
+        setEditMode(grid.editMode == .delete ? .off : .delete)
     }
 
     private func showFatal(_ message: String) {

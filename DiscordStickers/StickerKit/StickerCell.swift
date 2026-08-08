@@ -43,10 +43,9 @@ public final class StickerCell: UICollectionViewCell {
             contentView.addSubview(button)
         }
 
-        // Frames are 32x32 — short of the 44pt HIG minimum, which two of
-        // these would blow past in a ~68pt cell, but a meaningful step up
-        // from the 24pt they replace. The symbol configuration keeps the
-        // glyph itself visually small within the larger tappable frame.
+        // 44x44 — the full HIG minimum, affordable because only ever one of
+        // these is visible. Two 32pt buttons previously shared a ~63pt cell
+        // and physically overlapped; see StickerEditMode for the arithmetic.
         starButton.tintColor = .systemYellow
         starButton.addTarget(self, action: #selector(handleStar),
                              for: .touchUpInside)
@@ -66,15 +65,18 @@ public final class StickerCell: UICollectionViewCell {
             stickerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             stickerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
 
+            // Both occupy the same corner. Only one is ever visible, so there
+            // is no collision, and a single fixed position means the target
+            // does not move as you switch between favoriting and deleting.
             starButton.topAnchor.constraint(equalTo: contentView.topAnchor),
             starButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            starButton.widthAnchor.constraint(equalToConstant: 32),
-            starButton.heightAnchor.constraint(equalToConstant: 32),
+            starButton.widthAnchor.constraint(equalToConstant: 44),
+            starButton.heightAnchor.constraint(equalToConstant: 44),
 
             deleteButton.topAnchor.constraint(equalTo: contentView.topAnchor),
-            deleteButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            deleteButton.widthAnchor.constraint(equalToConstant: 32),
-            deleteButton.heightAnchor.constraint(equalToConstant: 32),
+            deleteButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            deleteButton.widthAnchor.constraint(equalToConstant: 44),
+            deleteButton.heightAnchor.constraint(equalToConstant: 44),
         ])
 
         // Recognizes alongside MSStickerView's own handling rather than
@@ -92,18 +94,25 @@ public final class StickerCell: UICollectionViewCell {
 
     public func configure(with sticker: MSSticker,
                           isFavorite: Bool,
-                          isEditing: Bool,
+                          mode: StickerEditMode,
                           onTap: @escaping () -> Void,
                           onToggleFavorite: @escaping () -> Void,
                           onDelete: @escaping () -> Void) {
         stickerView.sticker = sticker
+        // Assigning `.sticker` does NOT begin playback. Device testing found
+        // animated stickers frozen in the grid while animating correctly once
+        // sent into a conversation — the format was always fine, nobody had
+        // pressed play. `MSStickerView.h` documents startAnimating/
+        // stopAnimating but never states that assignment starts anything, and
+        // the simulator cannot reveal the difference.
+        stickerView.startAnimating()
         self.onTap = onTap
         self.onToggleFavorite = onToggleFavorite
         self.onDelete = onDelete
 
-        stickerView.isUserInteractionEnabled = !isEditing
-        starButton.isHidden = !isEditing
-        deleteButton.isHidden = !isEditing
+        stickerView.isUserInteractionEnabled = !mode.disablesSending
+        starButton.isHidden = mode != .favorites
+        deleteButton.isHidden = mode != .delete
         starButton.setImage(
             UIImage(systemName: isFavorite ? "star.fill" : "star",
                    withConfiguration: Self.glyphConfiguration),
@@ -113,6 +122,10 @@ public final class StickerCell: UICollectionViewCell {
 
     public override func prepareForReuse() {
         super.prepareForReuse()
+        // Stop before clearing: a recycled cell that keeps ticking is the same
+        // class of leak as one that keeps its decoded image, and the extension
+        // is killed somewhere between 40 and 120 MB.
+        stickerView.stopAnimating()
         stickerView.sticker = nil
         stickerView.isUserInteractionEnabled = true
         starButton.isHidden = true
