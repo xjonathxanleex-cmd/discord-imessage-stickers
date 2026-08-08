@@ -26,9 +26,13 @@ public struct StickerEntry: Codable, Equatable {
     /// Without persisting this, every animated sticker would come back
     /// static — or fail outright — after a restore.
     ///
-    /// Being optional makes this a free migration: synthesized `Codable`
-    /// uses `decodeIfPresent` for optionals, so manifests written before this
-    /// property existed decode with it nil, which defaults to false.
+    /// Non-optional, and `Codable` is hand-written rather than synthesized —
+    /// that combination is exactly why the hand-written implementation was
+    /// needed. A synthesized decoder treats a non-optional key as required
+    /// and would throw on every manifest written before this property
+    /// existed. `init(from:)` instead reads it with
+    /// `decodeIfPresent(...) ?? false`, so old manifests without the key
+    /// decode cleanly with `isAnimated` defaulting to `false`.
     public var isAnimated: Bool
 
     public init(id: String, name: String, source: StickerSource,
