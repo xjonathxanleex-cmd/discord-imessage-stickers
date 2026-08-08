@@ -25,6 +25,17 @@ final class StickerStoreTests: XCTestCase {
                      favoritedAt: favoritedAt)
     }
 
+    /// Adds a real file plus its entry, since undo has to restore both.
+    @discardableResult
+    private func addSticker(to store: StickerStore, id: String,
+                            name: String) throws -> StickerEntry {
+        let record = entry(id, name: name)
+        try store.add(record, movingFileFrom: try temp.makePNG(named: "\(id)-src.png"))
+        return record
+    }
+
+    private func temporaryRoot() throws -> URL { temp.url }
+
     func testAddThenReadBack() throws {
         let store = try makeStore()
         let png = try temp.makePNG(named: "a.png")
@@ -244,4 +255,111 @@ final class StickerStoreTests: XCTestCase {
         XCTAssertTrue(store.favorites().isEmpty)
         XCTAssertTrue(store.all().isEmpty)
     }
+
+    // MARK: - Undo delete
+
+    /// Delete mode offers no confirmation, deliberately — confirming every tap
+    /// while clearing out a dozen stickers is worse than the mistake it
+    /// prevents. That trade only holds if the mistake is reversible.
+    func testUndoRestoresADeletedSticker() throws {
+        let store = try makeStore()
+        try addSticker(to: store, id: "a", name: "alpha")
+
+        try store.delete(id: "a")
+        XCTAssertFalse(store.contains(id: "a"))
+        XCTAssertTrue(store.canUndoDelete)
+
+        let restored = store.undoLastDelete()
+        XCTAssertEqual(restored?.id, "a")
+        XCTAssertTrue(store.contains(id: "a"))
+    }
+
+    /// The image has to come back too. Restoring the entry alone would leave
+    /// the manifest naming a file that is gone — the one state this store must
+    /// never be in.
+    func testUndoRestoresTheImageFileNotJustTheEntry() throws {
+        let store = try makeStore()
+        try addSticker(to: store, id: "a", name: "alpha")
+
+        try store.delete(id: "a")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.fileURL(for: "a").path))
+
+        store.undoLastDelete()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: store.fileURL(for: "a").path),
+                      "an entry without its image breaks the manifest invariant")
+    }
+
+    /// The grid is ordered, so an undo that quietly moved a sticker to the end
+    /// would look like a different bug to whoever hit it.
+    func testUndoRestoresToTheOriginalPosition() throws {
+        let store = try makeStore()
+        for id in ["a", "b", "c"] { try addSticker(to: store, id: id, name: id) }
+
+        try store.delete(id: "b")
+        store.undoLastDelete()
+
+        XCTAssertEqual(store.all().map(\.id), ["a", "b", "c"])
+    }
+
+    func testUndoUnwindsSeveralDeletesInReverseOrder() throws {
+        let store = try makeStore()
+        for id in ["a", "b", "c"] { try addSticker(to: store, id: id, name: id) }
+
+        try store.delete(id: "a")
+        try store.delete(id: "c")
+
+        XCTAssertEqual(store.undoLastDelete()?.id, "c", "most recent first")
+        XCTAssertEqual(store.undoLastDelete()?.id, "a")
+        XCTAssertEqual(store.all().map(\.id), ["a", "b", "c"])
+    }
+
+    func testUndoIsUnavailableWithNothingDeleted() throws {
+        let store = try makeStore()
+        XCTAssertFalse(store.canUndoDelete)
+        XCTAssertNil(store.undoLastDelete())
+    }
+
+    func testUndoIsExhaustedAfterUnwindingEverything() throws {
+        let store = try makeStore()
+        try addSticker(to: store, id: "a", name: "alpha")
+
+        try store.delete(id: "a")
+        store.undoLastDelete()
+
+        XCTAssertFalse(store.canUndoDelete)
+        XCTAssertNil(store.undoLastDelete())
+    }
+
+    /// Each pending undo holds a sticker's image on disk. Unbounded, clearing
+    /// out a collection would hold every image twice against a 40-120 MB
+    /// ceiling.
+    func testUndoDepthIsBounded() throws {
+        let store = try makeStore()
+        let count = StickerLimits.undoDepth + 5
+        for index in 0..<count { try addSticker(to: store, id: "s\(index)", name: "s\(index)") }
+        for index in 0..<count { try store.delete(id: "s\(index)") }
+
+        var undone = 0
+        while store.undoLastDelete() != nil { undone += 1 }
+        XCTAssertEqual(undone, StickerLimits.undoDepth,
+                       "the oldest deletes past the cap are gone for real")
+    }
+
+    /// The undo stack is in-memory by design, so a new process must not
+    /// inherit a trash directory it can never act on.
+    func testTrashIsPurgedOnLaunchSoNothingAccumulates() throws {
+        let root = try temporaryRoot()
+        let first = try StickerStore(root: root, writeDebounce: 0)
+        try addSticker(to: first, id: "a", name: "alpha")
+        try first.delete(id: "a")
+        first.flush()
+
+        let second = try StickerStore(root: root, writeDebounce: 0)
+        XCTAssertFalse(second.canUndoDelete, "a fresh process has nothing to undo")
+
+        let trash = root.appendingPathComponent("trash")
+        let leftovers = try FileManager.default.contentsOfDirectory(atPath: trash.path)
+        XCTAssertTrue(leftovers.isEmpty, "orphaned trash would grow forever")
+    }
+
 }

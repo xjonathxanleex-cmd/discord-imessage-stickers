@@ -64,6 +64,11 @@ public enum StickerLimits {
     /// Last resort before an animated sticker is rejected outright.
     public static let minAnimatedFrames = 16
 
+    /// How many deletes can be undone. Bounded because each pending undo
+    /// holds a sticker's image on disk in `trash/`, and an unbounded stack
+    /// would double the container's size while clearing out a collection.
+    public static let undoDepth = 20
+
     public static let recentsLimit = 16
     public static let downloadConcurrency = 5
 

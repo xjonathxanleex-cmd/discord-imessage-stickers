@@ -38,6 +38,12 @@ public final class StickerGridViewController: UIViewController {
         }
     }
 
+    /// Called after a delete, with the removed sticker's name, so the host
+    /// can offer an undo. The grid does not own that affordance itself: it
+    /// belongs beside the other editing controls, not floating over the cells
+    /// it would obscure.
+    public var onDeleted: ((String) -> Void)?
+
     public init(store: StickerStore) {
         self.store = store
         super.init(nibName: nil, bundle: nil)
@@ -151,6 +157,7 @@ extension StickerGridViewController: UICollectionViewDataSource {
                     guard let self else { return }
                     try? self.store.delete(id: entry.id)
                     self.reload()
+                    self.onDeleted?(entry.name)
                 }
             )
         }

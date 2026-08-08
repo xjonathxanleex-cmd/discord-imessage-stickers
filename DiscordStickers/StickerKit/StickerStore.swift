@@ -21,20 +21,45 @@ public final class StickerStore: @unchecked Sendable {
     private let root: URL
     private let imagesDirectory: URL
     private let manifestURL: URL
+    private let trashDirectory: URL
     private let writeDebounce: TimeInterval
     private let queue = DispatchQueue(label: "StickerStore")
 
     private var entries: [StickerEntry] = []
     private var pendingWrite: DispatchWorkItem?
 
+    /// One deleted sticker, enough to put it back exactly where it was.
+    private struct DeletedSticker {
+        let entry: StickerEntry
+        let position: Int
+        /// nil when the image could not be moved to the trash, which makes
+        /// this entry un-undoable rather than restorable without its bytes.
+        let file: URL?
+    }
+
+    /// Most recent last. In memory only, and deliberately so: a Messages
+    /// extension is killed often, and an undo offered across a relaunch would
+    /// be an undo for something the user no longer remembers doing. The trash
+    /// directory is purged at init to match, so nothing accumulates.
+    private var undoStack: [DeletedSticker] = []
+
     public init(root: URL, writeDebounce: TimeInterval = 0.3) throws {
         self.root = root
         self.imagesDirectory = root.appendingPathComponent("stickers", isDirectory: true)
         self.manifestURL = root.appendingPathComponent("manifest.json")
+        self.trashDirectory = root.appendingPathComponent("trash", isDirectory: true)
         self.writeDebounce = writeDebounce
 
         try FileManager.default.createDirectory(
             at: imagesDirectory, withIntermediateDirectories: true
+        )
+
+        // Purged, not restored. The undo stack lives only in memory, so
+        // anything still here belongs to a previous process and can never be
+        // undone -- keeping it would grow the container forever for nothing.
+        try? FileManager.default.removeItem(at: trashDirectory)
+        try FileManager.default.createDirectory(
+            at: trashDirectory, withIntermediateDirectories: true
         )
         entries = Self.loadManifest(at: manifestURL, imagesDirectory: imagesDirectory)
     }
@@ -70,19 +95,21 @@ public final class StickerStore: @unchecked Sendable {
         }
     }
 
-    // Hardcodes ".png" as the storage name for every sticker, animated or
-    // not. This is NOT a format claim: `MSSticker` resolves conformance by
-    // sniffing content, not from the path extension — see StickerFormatTests
-    // — so animated stickers hold GIF bytes under a .png name quite happily.
-    // Keeping one extension is what let the APNG-to-GIF switch ship without
-    // migrating files already on users' phones.
-    // Previously this comment asserted the opposite; it was wrong. Cross-refs:
-    // the path extension, so GIF bytes stored here would fail construction.
-    // APNG output legitimately keeps this extension, which is why animated
-    // output stays PNG-family for now. If animated output ever switches to
-    // GIF, this must change together with the temp file name in
-    // `StickerCommitter.commit` and the `pathExtension == "png"` filter in
-    // `rebuildFromImages` below.
+    /// Hardcodes ".png" as the storage name for every sticker, animated or
+    /// not.
+    ///
+    /// This is **not** a format claim. `MSSticker` resolves conformance by
+    /// sniffing content, not from the path extension — see
+    /// `StickerFormatTests` — so animated stickers hold GIF bytes under a
+    /// `.png` name quite happily. An earlier version of this comment asserted
+    /// the opposite, and that belief was the whole reason the APNG-to-GIF
+    /// switch was thought to need a rename of every stored file plus a
+    /// migration for bytes already on users' phones. It needed neither.
+    ///
+    /// Keeping one extension everywhere is what makes that true. It is still
+    /// coupled by *name* to the temp file in `StickerCommitter.commit` and the
+    /// `pathExtension == "png"` filter in `rebuildFromImages` below; all three
+    /// must agree.
     public func fileURL(for id: String) -> URL {
         imagesDirectory.appendingPathComponent("\(id).png")
     }
@@ -120,11 +147,77 @@ public final class StickerStore: @unchecked Sendable {
         }
     }
 
+    /// Deleting moves the image to `trash/` and pushes the removed entry onto
+    /// an undo stack rather than destroying either outright.
+    ///
+    /// Delete mode offers no confirmation — deliberately, since confirming
+    /// every tap while clearing out a dozen stickers is worse than the mistake
+    /// it prevents. That trade only holds if the mistake is reversible, which
+    /// is what this is.
     public func delete(id: String) throws {
         queue.sync {
-            entries.removeAll { $0.id == id }
-            try? FileManager.default.removeItem(at: fileURL(for: id))
+            guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+            let entry = entries.remove(at: index)
+
+            // Move rather than delete, so undo has bytes to restore. A failed
+            // move still removes the entry: a manifest naming a file that is
+            // gone is the one state this store must never be in, and losing
+            // the ability to undo is far cheaper than breaking that invariant.
+            let source = fileURL(for: id)
+            let trashed = trashDirectory.appendingPathComponent(source.lastPathComponent)
+            try? FileManager.default.removeItem(at: trashed)
+            let moved = (try? FileManager.default.moveItem(at: source, to: trashed)) != nil
+            if !moved { try? FileManager.default.removeItem(at: source) }
+
+            undoStack.append(DeletedSticker(entry: entry, position: index,
+                                            file: moved ? trashed : nil))
+            trimUndoStackLocked()
             scheduleWriteLocked()
+        }
+    }
+
+    /// Restores the most recent delete, to the position it was removed from.
+    /// Returns the restored entry, or nil when there is nothing to undo.
+    ///
+    /// Restoring to the original index rather than appending matters because
+    /// the grid is ordered: an undo that silently moved a sticker to the end
+    /// would look like a different bug to whoever hit it.
+    @discardableResult
+    public func undoLastDelete() -> StickerEntry? {
+        queue.sync {
+            guard let deleted = undoStack.popLast() else { return nil }
+
+            if let file = deleted.file {
+                let destination = fileURL(for: deleted.entry.id)
+                try? FileManager.default.removeItem(at: destination)
+                // Without its image the entry would violate the manifest
+                // invariant, so a failed move means no restore at all.
+                guard (try? FileManager.default.moveItem(at: file, to: destination)) != nil
+                else { return nil }
+            } else {
+                return nil
+            }
+
+            entries.insert(deleted.entry, at: min(deleted.position, entries.count))
+            scheduleWriteLocked()
+            return deleted.entry
+        }
+    }
+
+    public var canUndoDelete: Bool {
+        queue.sync { !undoStack.isEmpty }
+    }
+
+    /// Drops the oldest undo entries past the cap, deleting their files for
+    /// real. Without this, deleting a large collection in one session would
+    /// hold every image twice until the extension was killed -- against a
+    /// 40-120 MB ceiling.
+    private func trimUndoStackLocked() {
+        while undoStack.count > StickerLimits.undoDepth {
+            let dropped = undoStack.removeFirst()
+            if let file = dropped.file {
+                try? FileManager.default.removeItem(at: file)
+            }
         }
     }
 

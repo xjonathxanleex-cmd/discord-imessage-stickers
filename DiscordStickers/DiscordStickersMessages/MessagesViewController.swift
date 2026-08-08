@@ -20,6 +20,7 @@ final class MessagesViewController: MSMessagesAppViewController {
     private let editButton = UIButton(type: .system)
     private let editScope = UISegmentedControl(items: StickerEditMode.scopeTitles)
     private let scopeRow = UIStackView()
+    private let undoButton = UIButton(type: .system)
     private let searchRow = UIStackView()
     private let pasteContainer = UIView()
     private let topControls = UIStackView()
@@ -92,10 +93,20 @@ final class MessagesViewController: MSMessagesAppViewController {
         // state is visible without reading the label.
         editScope.selectedSegmentTintColor = nil
 
+        undoButton.setTitle("Undo delete", for: .normal)
+        undoButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
+        undoButton.setContentHuggingPriority(.required, for: .horizontal)
+        undoButton.addTarget(self, action: #selector(undoTapped), for: .touchUpInside)
+        // Hidden until there is something to undo, rather than shown disabled:
+        // a permanently greyed control reads as broken, and this one is only
+        // meaningful for the moments right after a delete.
+        undoButton.isHidden = true
+
         scopeRow.axis = .horizontal
         scopeRow.isLayoutMarginsRelativeArrangement = true
         scopeRow.layoutMargins = UIEdgeInsets(top: 0, left: 12, bottom: 8, right: 12)
         scopeRow.addArrangedSubview(editScope)
+        scopeRow.addArrangedSubview(undoButton)
 
         searchRow.axis = .horizontal
         searchRow.alignment = .center
@@ -114,6 +125,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         topControls.translatesAutoresizingMaskIntoConstraints = false
 
         grid = StickerGridViewController(store: store)
+        grid.onDeleted = { [weak self] _ in self?.refreshUndoButton() }
         addChild(grid)
         grid.view.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(grid.view)
@@ -247,6 +259,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         // Destructive tint while delete is armed, so the state is legible
         // without reading the segment label.
         editScope.selectedSegmentTintColor = (mode == .delete) ? .systemRed : nil
+        if mode != .delete { undoButton.isHidden = true }
     }
 
     @objc private func tabChanged() {
@@ -260,6 +273,22 @@ final class MessagesViewController: MSMessagesAppViewController {
     @objc private func editTapped() {
         guard grid != nil else { return }
         setEditMode(grid.editMode == .off ? StickerEditMode.entryMode : .off)
+    }
+
+    private func refreshUndoButton() {
+        undoButton.isHidden = !(store?.canUndoDelete ?? false)
+    }
+
+    @objc private func undoTapped() {
+        guard grid != nil, store.undoLastDelete() != nil else {
+            // The image could not be put back, so restoring the entry would
+            // leave the manifest naming a file that is gone. Say so rather
+            // than silently doing nothing.
+            undoButton.isHidden = true
+            return
+        }
+        grid.reload()
+        refreshUndoButton()
     }
 
     @objc private func editScopeChanged() {
