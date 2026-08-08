@@ -17,6 +17,9 @@ public final class PasteViewController: UIViewController {
 
     public var onFinished: ((DownloadOutcome) -> Void)?
 
+    private let exportButton = UIButton(type: .system)
+    private let importButton = UIButton(type: .system)
+
     public init(store: StickerStore, downloader: EmojiDownloader) {
         self.store = store
         self.downloader = downloader
@@ -46,7 +49,21 @@ public final class PasteViewController: UIViewController {
 
         spinner.hidesWhenStopped = true
 
-        let stack = UIStackView(arrangedSubviews: [pasteControl, spinner, statusLabel])
+        exportButton.setTitle("Back Up", for: .normal)
+        exportButton.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
+        exportButton.addTarget(self, action: #selector(exportTapped), for: .touchUpInside)
+
+        importButton.setTitle("Restore", for: .normal)
+        importButton.titleLabel?.font = .preferredFont(forTextStyle: .caption1)
+        importButton.addTarget(self, action: #selector(importTapped), for: .touchUpInside)
+
+        let buttons = UIStackView(arrangedSubviews: [exportButton, importButton])
+        buttons.axis = .horizontal
+        buttons.spacing = 16
+
+        let stack = UIStackView(
+            arrangedSubviews: [pasteControl, spinner, statusLabel, buttons]
+        )
         stack.axis = .vertical
         stack.alignment = .center
         stack.spacing = 8
@@ -124,5 +141,39 @@ public final class PasteViewController: UIViewController {
 
         guard !parts.isEmpty else { return "Nothing to add." }
         return parts.joined(separator: ", ") + "."
+    }
+
+    @objc private func exportTapped() {
+        UIPasteboard.general.string = ManifestTransfer.export(from: store)
+        statusLabel.text = "Backup copied. Paste it somewhere safe."
+    }
+
+    /// Restore reads the pasteboard directly and so will trigger the system
+    /// paste alert. That is acceptable here: this runs roughly once a week at
+    /// most, unlike the main paste flow.
+    @objc private func importTapped() {
+        guard let text = UIPasteboard.general.string else {
+            statusLabel.text = "Nothing on the clipboard to restore."
+            return
+        }
+        let entries = ManifestTransfer.parseImport(text)
+        guard !entries.isEmpty else {
+            statusLabel.text = "That doesn't look like a backup."
+            return
+        }
+
+        spinner.startAnimating()
+        statusLabel.text = "Restoring \(entries.count) stickers…"
+
+        Task {
+            let outcome = await ManifestTransfer.restore(
+                entries, store: store, downloader: downloader
+            )
+            await MainActor.run {
+                spinner.stopAnimating()
+                statusLabel.text = Self.summary(for: outcome)
+                onFinished?(outcome)
+            }
+        }
     }
 }
