@@ -22,6 +22,11 @@ public final class PasteViewController: UIViewController {
     private let importButton = UIButton(type: .system)
     private let linkButton = UIButton(type: .system)
 
+    /// Guards against a second tap starting a second fetch while the first
+    /// is still in flight. Without this, UIKit silently drops the second
+    /// `present(_:)` call and that draft is lost with no error shown.
+    private var isFetchingLink = false
+
     public init(store: StickerStore, downloader: EmojiDownloader) {
         self.store = store
         self.downloader = downloader
@@ -193,12 +198,23 @@ public final class PasteViewController: UIViewController {
     /// alert. Acceptable here for the same reason Restore accepts it: this is
     /// an occasional action, not the app's core loop.
     @objc private func linkTapped() {
+        guard !isFetchingLink else { return }
+
         guard let text = UIPasteboard.general.string,
               let link = LinkParser.parse(text) else {
             statusLabel.text = "That doesn't look like a link."
             return
         }
 
+        // Checked before any network work so the paste isn't consumed for
+        // nothing — the user can simply paste again once they're back
+        // online. Same guard and message as the emoji paste flow.
+        guard NetworkReachability.isLikelyOnline else {
+            statusLabel.text = "You're offline — paste again when you're back."
+            return
+        }
+
+        isFetchingLink = true
         spinner.startAnimating()
         statusLabel.text = "Fetching…"
 
@@ -207,6 +223,7 @@ public final class PasteViewController: UIViewController {
             let result = await DraftFetcher().fetch(link)
 
             await MainActor.run {
+                self.isFetchingLink = false
                 self.spinner.stopAnimating()
                 switch result {
                 case .failure(let error):
@@ -230,11 +247,18 @@ public final class PasteViewController: UIViewController {
     private func presentReview(for drafts: [StickerDraft]) {
         let review = StickerReviewViewController(drafts: drafts, store: store)
         let navigation = UINavigationController(rootViewController: review)
+        // A swipe-down must not be able to bypass `onFinished` entirely —
+        // that would skip both the cancelled-status update and any eventual
+        // outcome reporting.
+        navigation.isModalInPresentation = true
 
-        review.onFinished = { [weak self] outcome in
+        review.onFinished = { [weak self, weak navigation] outcome in
+            navigation?.dismiss(animated: true)
             guard let self else { return }
-            navigation.dismiss(animated: true)
-            guard let outcome else { return }   // cancelled
+            guard let outcome else {
+                self.statusLabel.text = "Cancelled."
+                return
+            }
             self.statusLabel.text = Self.summary(for: outcome)
             self.onFinished?(outcome)
         }
