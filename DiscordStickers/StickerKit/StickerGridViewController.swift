@@ -22,6 +22,20 @@ public final class StickerGridViewController: UIViewController {
         didSet { if filter != oldValue { reload() } }
     }
 
+    /// While editing, cells show a star and an ×, and `MSStickerView`
+    /// interaction is off — sending and dragging are disabled for the
+    /// duration rather than competing with the edit controls for gestures.
+    ///
+    /// This shadows `UIViewController.isEditing` (bridged from the
+    /// Objective-C `editing`/`isEditing` pair), which is why it's an
+    /// `override` rather than a fresh stored property — a plain
+    /// `public var isEditing: Bool = false` does not compile here, since
+    /// UIKit already declares a settable `isEditing` on the superclass.
+    /// It defaults to `false`, matching `UIViewController`'s own default.
+    public override var isEditing: Bool {
+        didSet { if isEditing != oldValue { collectionView?.reloadData() } }
+    }
+
     public init(store: StickerStore) {
         self.store = store
         super.init(nibName: nil, bundle: nil)
@@ -116,9 +130,24 @@ extension StickerGridViewController: UICollectionViewDataSource {
             contentsOfFileURL: store.fileURL(for: entry.id),
             localizedDescription: entry.name
         ) {
-            cell.configure(with: sticker) { [weak self] in
-                self?.store.recordUse(id: entry.id)
-            }
+            cell.configure(
+                with: sticker,
+                isFavorite: entry.favoritedAt != nil,
+                isEditing: isEditing,
+                onTap: { [weak self] in
+                    self?.store.recordUse(id: entry.id)
+                },
+                onToggleFavorite: { [weak self] in
+                    guard let self else { return }
+                    self.store.setFavorite(entry.favoritedAt == nil, id: entry.id)
+                    self.reload()
+                },
+                onDelete: { [weak self] in
+                    guard let self else { return }
+                    try? self.store.delete(id: entry.id)
+                    self.reload()
+                }
+            )
         }
         return cell
     }
