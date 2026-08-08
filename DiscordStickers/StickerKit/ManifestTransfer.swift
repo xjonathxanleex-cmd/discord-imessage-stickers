@@ -39,6 +39,12 @@ public enum ManifestTransfer {
 
     /// Re-downloads every listed emoji, then replays the saved use counts so
     /// Recents comes back correctly ordered rather than empty.
+    ///
+    /// The replay *adds* `useCount` recordings on top of whatever the store
+    /// already has for that id rather than reconciling to the saved value —
+    /// fine for the intended case of restoring into a fresh store after a
+    /// reinstall, but calling this against a store that already has activity
+    /// for an id will inflate its count rather than overwrite it.
     public static func restore(
         _ entries: [StickerEntry],
         store: StickerStore,
