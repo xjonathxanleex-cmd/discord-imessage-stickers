@@ -152,4 +152,34 @@ final class ManifestTransferTests: XCTestCase {
 
         XCTAssertEqual(store.favorites().map(\.id), ["111", "222", "333"])
     }
+
+    func testRestorePreservesTheAnimatedFlag() async throws {
+        // Without this, restore rebuilds ParsedEmoji with isAnimated false,
+        // requests .png for an animated emoji, and the CDN answers 415 — so
+        // an animated sticker comes back broken rather than merely static.
+        let entries = [
+            StickerEntry(id: "111", name: "cuh", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 1000),
+                         useCount: 0, favoritedAt: nil, isAnimated: true),
+            StickerEntry(id: "222", name: "wave", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 2000),
+                         useCount: 0, favoritedAt: nil, isAnimated: false),
+        ]
+
+        StubURLProtocol.handler = { request in
+            switch request.url?.lastPathComponent {
+            case "111.gif": return (200, self.temp.makeAnimatedGIFData(frameCount: 6))
+            case "222.png": return (200, self.pngData(width: 128))
+            default:        return (415, Data())
+            }
+        }
+
+        _ = await ManifestTransfer.restore(entries, store: store,
+                                           downloader: makeDownloader())
+
+        let byID = Dictionary(uniqueKeysWithValues: store.all().map { ($0.id, $0) })
+        XCTAssertEqual(byID["111"]?.isAnimated, true)
+        XCTAssertEqual(byID["222"]?.isAnimated, false)
+        XCTAssertEqual(store.all().count, 2)
+    }
 }

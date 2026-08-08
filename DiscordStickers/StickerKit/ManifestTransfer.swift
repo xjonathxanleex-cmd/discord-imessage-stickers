@@ -3,11 +3,14 @@ import Foundation
 /// Moves the manifest in and out as clipboard text.
 ///
 /// A re-paste already restores names and images from the CDN, so what this
-/// genuinely rescues is `useCount` and `favoritedAt` — the two pieces of
-/// data in the app that cannot be re-derived from Discord. Text rather than a
-/// file, because text survives being pasted into a note and retrieved a week
-/// later, and because file-sharing UI inside a Messages extension is more
-/// friction than this feature earns.
+/// genuinely rescues is `useCount`, `favoritedAt`, and `isAnimated` — the
+/// pieces of data in the app that cannot be re-derived from Discord.
+/// `isAnimated` in particular must survive intact: the CDN returns 415 for
+/// an emoji requested with the wrong extension, so losing the flag doesn't
+/// merely degrade a restored sticker, it can break the request for it.
+/// Text rather than a file, because text survives being pasted into a note
+/// and retrieved a week later, and because file-sharing UI inside a
+/// Messages extension is more friction than this feature earns.
 public enum ManifestTransfer {
 
     private static var encoder: JSONEncoder {
@@ -60,7 +63,7 @@ public enum ManifestTransfer {
     ) async -> DownloadOutcome {
         let outcome = await downloader.download(
             entries.map {
-                ParsedEmoji(id: $0.id, name: $0.name, isAnimated: false)
+                ParsedEmoji(id: $0.id, name: $0.name, isAnimated: $0.isAnimated)
             }
         )
 
