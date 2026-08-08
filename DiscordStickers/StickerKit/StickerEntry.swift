@@ -1,8 +1,16 @@
 import Foundation
 
+/// Where a sticker came from.
+///
+/// String-raw-valued and persisted in `manifest.json`, so cases may be
+/// **added** freely but never renamed or removed — an unknown raw value
+/// fails to decode the whole entry, silently losing a sticker the user
+/// already had.
 public enum StickerSource: String, Codable {
     case pasted
     case server
+    case photo
+    case link
 }
 
 /// One row of `manifest.json`. Every entry that reaches the manifest has had

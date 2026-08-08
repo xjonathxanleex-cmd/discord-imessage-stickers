@@ -155,4 +155,33 @@ final class StickerEntryTests: XCTestCase {
                           StickerLimits.canvasSize)
         XCTAssertGreaterThan(StickerLimits.maxAnimatedFrames, 1)
     }
+
+    func testAllStickerSourcesRoundTripThroughJSON() throws {
+        // Cases may be added but never renamed or removed: StickerSource is
+        // String-raw-valued, so an unknown case fails to decode the entire
+        // entry, silently losing a sticker the user already had.
+        for source in [StickerSource.pasted, .server, .photo, .link] {
+            let entry = StickerEntry(id: "1", name: "a", source: source,
+                                     addedAt: Date(timeIntervalSince1970: 0),
+                                     useCount: 0)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+
+            let decoded = try decoder.decode(
+                StickerEntry.self, from: try encoder.encode(entry)
+            )
+            XCTAssertEqual(decoded.source, source)
+        }
+    }
+
+    func testStickerSourceRawValuesAreStable() {
+        // These strings are written into manifest.json on the user's device.
+        // Changing one orphans every sticker already stored with it.
+        XCTAssertEqual(StickerSource.pasted.rawValue, "pasted")
+        XCTAssertEqual(StickerSource.server.rawValue, "server")
+        XCTAssertEqual(StickerSource.photo.rawValue, "photo")
+        XCTAssertEqual(StickerSource.link.rawValue, "link")
+    }
 }
