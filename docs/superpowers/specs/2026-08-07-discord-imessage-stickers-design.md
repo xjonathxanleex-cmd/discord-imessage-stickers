@@ -121,7 +121,7 @@ Modeled on Twitch emote sticker apps (7TV, Emote Keyboard):
 
 **Not** using Apple's stock `MSStickerBrowserViewController` — it offers no search, no tabs, and no recents. Instead subclass `MSMessagesAppViewController` with a `UICollectionView` whose cells host `MSStickerView`, which still gives tap-to-send and drag-onto-bubble for free.
 
-**Paste uses `UIPasteControl`** (iOS 16+), not a plain button calling `UIPasteboard.general.string`. Reading the pasteboard in code triggers a system *"Allow Paste?"* alert on every invocation, which would be intolerable for this app's core action. A tap on `UIPasteControl` *is* the consent, so access is granted silently.
+**Paste uses a plain button calling `UIPasteboard.general.string`**, not `UIPasteControl`. `UIPasteControl` (iOS 16+) was the original choice, specifically to avoid the system *"Allow Paste?"* alert that a direct pasteboard read triggers. Real-device testing showed it renders permanently disabled inside a Messages extension — even with valid text on the clipboard, it evidently cannot determine the pasteboard's contents in that sandbox. A button that never enables is a worse failure than one system prompt, so the app accepts one *"Allow Paste?"* prompt per batch paste. That is an acceptable trade: a batch paste is a rare action, roughly once a week or after the 7-day reinstall, not something done per-sticker.
 
 ---
 
@@ -129,7 +129,7 @@ Modeled on Twitch emote sticker apps (7TV, Emote Keyboard):
 
 The path a pasted string takes. All of it runs inside the extension, triggered from expanded mode.
 
-1. **Capture.** User taps the paste control; the system hands over the pasteboard string. Nothing polls or observes the clipboard.
+1. **Capture.** User taps the paste button; the app reads `UIPasteboard.general.string` directly, which triggers one system *"Allow Paste?"* prompt for the batch. Nothing polls or observes the clipboard otherwise.
 
 2. **Parse.** `EmojiMarkupParser` extracts `<(a)?:name:id>` triples and dedupes by ID within the batch. A paste with zero matches is a normal reportable outcome, not an error.
 
@@ -211,7 +211,7 @@ The dividing line is whether a behavior depends on something we control. Logic w
 - Tap a sticker — does it insert into the conversation?
 - Drag a sticker onto an existing bubble (peel-and-stick).
 - Compact → expanded → compact without losing scroll position.
-- Paste via `UIPasteControl` with no *"Allow Paste?"* alert appearing.
+- Paste via the paste button. One *"Allow Paste?"* alert appearing per batch is expected and acceptable; confirm it does not appear more than once per tap.
 - Recents reorder after repeated taps on the same sticker.
 - Search filters as you type.
 - Extension cold-launch time is within Messages' window for extensions to appear.
@@ -251,5 +251,5 @@ Viable, but the obstacles are legal rather than technical.
 ## 11. Verify on the Mac before coding
 
 1. ~~`curl` a known emoji ID at `?size=512`~~ — **done 2026-08-07.** Results in `docs/superpowers/plans/task-0-findings.md`. Two assumptions failed and §3, §4, §5, §6, §7 and §8 were corrected accordingly: `size` only downscales, and emoji below 100px are common enough to require normalization.
-2. Confirm `UIPasteControl` is usable inside a Messages extension on the target iOS version. *(Verified in Task 11 Step 2 on device.)*
+2. ~~Confirm `UIPasteControl` is usable inside a Messages extension on the target iOS version.~~ — **Falsified in Task 11 Step 2 on device**: it renders permanently disabled inside a Messages extension despite a valid pasteboard. Replaced with a plain button reading `UIPasteboard.general.string` directly, accepting one *"Allow Paste?"* prompt per batch paste (see §4, §5).
 3. Confirm the free Personal Team provisions both targets together without an App Groups entitlement anywhere in either target's capabilities. *(Verified in Task 1 on the Mac.)*
