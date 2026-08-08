@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discord Stickers — build a sticker set</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎨</text></svg>">
+<style>
+  :root { --bg:#fff; --fg:#1a1a1a; --muted:#666; --line:#ddd; --accent:#5865f2; --bad:#c22; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16171a; --fg:#e8e8e8; --muted:#999; --line:#333; --accent:#7983f5; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0 auto; padding:2rem 1rem 4rem; background:var(--bg); color:var(--fg);
+         font:16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+         max-width:900px; }
+  h1 { font-size:1.5rem; margin:0 0 .25rem; }
+  h2 { font-size:1rem; margin:2rem 0 .5rem; }
+  p.sub { color:var(--muted); margin:0 0 2rem; }
+  textarea, input[type=text] { width:100%; padding:.6rem; font:inherit; font-size:.9rem;
+    background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:6px; }
+  textarea { min-height:5rem; resize:vertical; font-family:ui-monospace, monospace; }
+  button { font:inherit; padding:.5rem 1rem; border:1px solid var(--line); border-radius:6px;
+    background:var(--bg); color:var(--fg); cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr));
+          gap:.5rem; margin-top:1rem; }
+  .cell { display:flex; align-items:center; gap:.5rem; padding:.4rem;
+          border:1px solid var(--line); border-radius:6px; }
+  .cell img { width:32px; height:32px; object-fit:contain; flex:none; }
+  .cell input[type=text] { border:none; padding:.2rem; font-size:.85rem; min-width:0; }
+  .cell input[type=text]:focus { outline:1px solid var(--accent); border-radius:3px; }
+  #out { width:100%; min-height:8rem; font-family:ui-monospace, monospace; font-size:.8rem;
+         margin-top:.5rem; }
+  #qrs { display:flex; gap:1rem; flex-wrap:wrap; margin-top:1rem; }
+  .qr { text-align:center; font-size:.8rem; color:var(--muted); }
+  .qr img { display:block; width:240px; height:240px; image-rendering:pixelated;
+            background:#fff; padding:8px; border-radius:6px; }
+  .muted { color:var(--muted); font-size:.85rem; min-height:1.2em; }
+  .bad { color:var(--bad); font-size:.85rem; min-height:1.2em; }
+</style>
+</head>
+<body>
+<h1>Build a sticker set</h1>
+<p class="sub">Gather emoji here, then send the result to your phone. Nothing is uploaded or
+stored — this page only handles names and links, and your phone fetches the images itself.</p>
+
+<h2>1 · Paste Discord messages</h2>
+<textarea id="in-markup" placeholder="Paste a Discord message containing custom emoji…"></textarea>
+<div id="msg-markup" class="muted"></div>
+
+<h2>2 · A 7TV emote set</h2>
+<div class="row">
+  <input type="text" id="in-7tv" placeholder="7TV emote-set id or URL, or 'global'">
+  <button id="btn-7tv">Load</button>
+</div>
+<div id="msg-7tv" class="muted"></div>
+
+<h2>3 · Emoji ids or image links</h2>
+<textarea id="in-raw" placeholder="One per line — an emoji id, a cdn.discordapp.com link, or a cdn.7tv.app link"></textarea>
+<div id="msg-raw" class="muted"></div>
+
+<h2>Selected <span id="count" class="muted"></span></h2>
+<div class="row">
+  <button id="btn-all">Select all</button>
+  <button id="btn-none">Select none</button>
+  <button id="btn-clear">Clear everything</button>
+</div>
+<div id="grid"></div>
+
+<h2>Send it to your phone</h2>
+<div class="row">
+  <button id="btn-copy" class="primary">Copy payload</button>
+  <span id="size" class="muted"></span>
+  <span id="msg-copy" class="muted"></span>
+</div>
+<textarea id="out" readonly></textarea>
+<div id="qrs"></div>
+
+<script src="vendor/qrcode.js"></script>
+<script src="parse.js"></script>
+<script src="sevenTV.js"></script>
+<script src="payload.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

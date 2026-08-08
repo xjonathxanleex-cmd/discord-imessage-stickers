@@ -1,0 +1,47 @@
+[
+  { "why": "one static emoji",
+    "input": "hello <:67:1481800758532903104> world",
+    "expect": [{ "id": "1481800758532903104", "name": "67", "animated": false }] },
+
+  { "why": "animated marker",
+    "input": "<a:catJAM:1095953169969860649>",
+    "expect": [{ "id": "1095953169969860649", "name": "catJAM", "animated": true }] },
+
+  { "why": "duplicate ids collapse to the first occurrence",
+    "input": "<:a:111> <:b:111>",
+    "expect": [{ "id": "111", "name": "a", "animated": false }] },
+
+  { "why": "original left-to-right order is preserved",
+    "input": "<:third:3> <:first:1> <:second:2>",
+    "expect": [
+      { "id": "3", "name": "third", "animated": false },
+      { "id": "1", "name": "first", "animated": false },
+      { "id": "2", "name": "second", "animated": false }] },
+
+  { "why": "underscores and digits are legal name characters",
+    "input": "<:pepe_Hands2:999>",
+    "expect": [{ "id": "999", "name": "pepe_Hands2", "animated": false }] },
+
+  { "why": "a hyphen is not a legal name character, so this is not markup",
+    "input": "<:not-valid:123>",
+    "expect": [] },
+
+  { "why": "a non-numeric id is not markup",
+    "input": "<:name:abc>",
+    "expect": [] },
+
+  { "why": "no markup at all",
+    "input": "just some ordinary text",
+    "expect": [] },
+
+  { "why": "markup embedded in surrounding punctuation still matches",
+    "input": "(<:x:5>)!",
+    "expect": [{ "id": "5", "name": "x", "animated": false }] },
+
+  { "why": "static and animated mixed, both kept, order preserved",
+    "input": "<:s:10><a:m:20><:t:30>",
+    "expect": [
+      { "id": "10", "name": "s", "animated": false },
+      { "id": "20", "name": "m", "animated": true },
+      { "id": "30", "name": "t", "animated": false }] }
+]
