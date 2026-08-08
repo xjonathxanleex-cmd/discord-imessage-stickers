@@ -80,13 +80,27 @@ public final class DraftFetcher: Sendable {
             return .failure(.tooLarge)
         }
 
+        // The bytes decide, not the URL's file extension.
+        //
+        // `LinkParser` infers animation from the path ending `.gif`, which is
+        // wrong for most real links: Discord's "Copy Link" hands out `.webp`
+        // URLs, and plenty of hosts serve animated content from an extension
+        // that says nothing about it. The old guess was also *destructive*
+        // rather than merely mislabelling — an animated image judged static
+        // takes the downsample branch below, which flattens it to a single
+        // frame before anything downstream could recover it.
+        //
+        // `PhotoDraftLoader` has always sniffed the bytes this way; this path
+        // trusting the filename instead was the inconsistency.
+        let isAnimated = AnimatedStickerProcessor.frameCount(of: data) >= 2
+
         // Animated drafts are left untouched — AnimatedStickerProcessor
         // already streams one frame at a time, and the dimension check above
         // bounds a single frame. Static drafts are downsampled here, at
         // decode time, so the full-resolution bitmap this byte cap was
         // supposed to bound is never actually materialized downstream.
         let imageData: Data
-        if !link.isAnimated,
+        if !isAnimated,
            max(dimensions.width, dimensions.height) > StickerLimits.maxDimension,
            let downsampled = ImageDownsampler.downsampled(data, maxPixel: StickerLimits.maxDimension) {
             imageData = downsampled
@@ -98,7 +112,7 @@ public final class DraftFetcher: Sendable {
             name: link.suggestedName,
             imageData: imageData,
             origin: .link,
-            isAnimated: link.isAnimated
+            isAnimated: isAnimated
         ))
     }
 }

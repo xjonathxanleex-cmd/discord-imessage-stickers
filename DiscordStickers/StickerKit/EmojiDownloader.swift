@@ -178,6 +178,17 @@ public final class EmojiDownloader: Sendable {
     /// choppier animation reads as intentional, a blurry sticker reads as
     /// broken.
     private func process(_ emoji: ParsedEmoji, raw: Data, animated: Bool) -> ItemResult {
+        // The flag says which URL to *request*; the bytes say what arrived.
+        // Where they disagree, the bytes win — a multi-frame response routed
+        // down the static path would be silently flattened to frame one, and
+        // recorded as static so no later self-heal could recover it.
+        //
+        // Discord's CDN makes the flag mostly reliable by answering 415 for a
+        // wrong-format request, which the caller retries. 7TV does not: it
+        // returns 200 with a valid still image. This check is what makes the
+        // rule uniform across every import path rather than per-CDN folklore.
+        let animated = animated || AnimatedStickerProcessor.frameCount(of: raw) >= 2
+
         guard animated else {
             // Raw bytes are never trusted: Discord emoji are often non-square
             // and sometimes below MSSticker's floor (76x61 measured in Task 0).
