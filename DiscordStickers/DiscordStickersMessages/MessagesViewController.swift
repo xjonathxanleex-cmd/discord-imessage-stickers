@@ -17,6 +17,7 @@ final class MessagesViewController: MSMessagesAppViewController {
     private let searchBar = UISearchBar()
     private let tabs = UISegmentedControl(items: ["Recent", "All"])
     private let pasteContainer = UIView()
+    private let topControls = UIStackView()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -50,6 +51,9 @@ final class MessagesViewController: MSMessagesAppViewController {
 
         pasteContainer.translatesAutoresizingMaskIntoConstraints = false
 
+        topControls.axis = .vertical
+        topControls.translatesAutoresizingMaskIntoConstraints = false
+
         grid = StickerGridViewController(store: store)
         addChild(grid)
         grid.view.translatesAutoresizingMaskIntoConstraints = false
@@ -61,11 +65,14 @@ final class MessagesViewController: MSMessagesAppViewController {
         addChild(paste)
         paste.view.translatesAutoresizingMaskIntoConstraints = false
         pasteContainer.addSubview(paste.view)
-        paste.didMove(toParent: self)
 
-        view.addSubview(searchBar)
+        topControls.addArrangedSubview(pasteContainer)
+        topControls.addArrangedSubview(searchBar)
+
+        view.addSubview(topControls)
         view.addSubview(tabs)
-        view.addSubview(pasteContainer)
+
+        paste.didMove(toParent: self)
 
         NSLayoutConstraint.activate([
             paste.view.topAnchor.constraint(equalTo: pasteContainer.topAnchor),
@@ -73,17 +80,14 @@ final class MessagesViewController: MSMessagesAppViewController {
             paste.view.leadingAnchor.constraint(equalTo: pasteContainer.leadingAnchor),
             paste.view.trailingAnchor.constraint(equalTo: pasteContainer.trailingAnchor),
 
-            pasteContainer.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor),
-            pasteContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            pasteContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             pasteContainer.heightAnchor.constraint(equalToConstant: 76),
 
-            searchBar.topAnchor.constraint(equalTo: pasteContainer.bottomAnchor),
-            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            topControls.topAnchor.constraint(
+                equalTo: view.safeAreaLayoutGuide.topAnchor),
+            topControls.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            topControls.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 
-            grid.view.topAnchor.constraint(equalTo: searchBar.bottomAnchor),
+            grid.view.topAnchor.constraint(equalTo: topControls.bottomAnchor),
             grid.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             grid.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             grid.view.bottomAnchor.constraint(equalTo: tabs.topAnchor, constant: -8),
@@ -103,14 +107,19 @@ final class MessagesViewController: MSMessagesAppViewController {
     }
 
     private func applyPresentationStyle(_ style: MSMessagesAppPresentationStyle) {
+        // viewDidLoad may have bailed out after a failed StickerStore init, in
+        // which case buildUI() never ran and grid/paste are still nil. This
+        // callback fires independently of that, so guard against it.
+        guard grid != nil else { return }
+
         let expanded = (style == .expanded)
         searchBar.isHidden = !expanded
         pasteContainer.isHidden = !expanded
         if !expanded {
             searchBar.text = nil
             searchBar.resignFirstResponder()
-            grid.filter = tabs.selectedSegmentIndex == 0 ? .recents : .all
         }
+        grid.filter = tabs.selectedSegmentIndex == 0 ? .recents : .all
         view.setNeedsLayout()
     }
 
@@ -126,6 +135,7 @@ final class MessagesViewController: MSMessagesAppViewController {
     // MARK: - Actions
 
     @objc private func tabChanged() {
+        guard grid != nil else { return }
         searchBar.text = nil
         grid.filter = tabs.selectedSegmentIndex == 0 ? .recents : .all
     }
