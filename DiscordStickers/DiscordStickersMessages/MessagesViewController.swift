@@ -18,7 +18,8 @@ final class MessagesViewController: MSMessagesAppViewController {
     private let searchBar = UISearchBar()
     private let tabs = UISegmentedControl(items: ["Favorites", "Recent", "All"])
     private let editButton = UIButton(type: .system)
-    private let deleteButton = UIButton(type: .system)
+    private let editScope = UISegmentedControl(items: StickerEditMode.scopeTitles)
+    private let scopeRow = UIStackView()
     private let searchRow = UIStackView()
     private let pasteContainer = UIView()
     private let topControls = UIStackView()
@@ -61,18 +62,23 @@ final class MessagesViewController: MSMessagesAppViewController {
         editButton.addTarget(self, action: #selector(editTapped),
                              for: .touchUpInside)
 
-        deleteButton.setTitle("Delete", for: .normal)
-        deleteButton.titleLabel?.font = .preferredFont(forTextStyle: .subheadline)
-        deleteButton.setContentHuggingPriority(.required, for: .horizontal)
-        deleteButton.addTarget(self, action: #selector(deleteTapped),
-                               for: .touchUpInside)
+        editScope.selectedSegmentIndex = 0
+        editScope.addTarget(self, action: #selector(editScopeChanged),
+                            for: .valueChanged)
+        // Destructive tint only on the segment that deletes, so the armed
+        // state is visible without reading the label.
+        editScope.selectedSegmentTintColor = nil
+
+        scopeRow.axis = .horizontal
+        scopeRow.isLayoutMarginsRelativeArrangement = true
+        scopeRow.layoutMargins = UIEdgeInsets(top: 0, left: 12, bottom: 8, right: 12)
+        scopeRow.addArrangedSubview(editScope)
 
         searchRow.axis = .horizontal
         searchRow.alignment = .center
         searchRow.spacing = 8
         searchRow.addArrangedSubview(searchBar)
         searchRow.addArrangedSubview(editButton)
-        searchRow.addArrangedSubview(deleteButton)
 
         pasteContainer.translatesAutoresizingMaskIntoConstraints = false
 
@@ -93,6 +99,9 @@ final class MessagesViewController: MSMessagesAppViewController {
 
         topControls.addArrangedSubview(pasteContainer)
         topControls.addArrangedSubview(searchRow)
+        // Last, so it sits directly above the grid it acts on rather than up
+        // in the toolbar with the controls that act on the whole drawer.
+        topControls.addArrangedSubview(scopeRow)
 
         view.addSubview(topControls)
         view.addSubview(tabs)
@@ -196,10 +205,12 @@ final class MessagesViewController: MSMessagesAppViewController {
     /// read as active, and there is always exactly one Done to tap.
     private func setEditMode(_ mode: StickerEditMode) {
         grid?.editMode = mode
-        editButton.setTitle(mode.buttonTitle(for: .favorites), for: .normal)
-        deleteButton.setTitle(mode.buttonTitle(for: .delete), for: .normal)
-        // Deleting is the destructive mode, so it says so while it is armed.
-        deleteButton.tintColor = (mode == .delete) ? .systemRed : .tintColor
+        editButton.setTitle(mode.editButtonTitle, for: .normal)
+        scopeRow.isHidden = !mode.showsScopeBar
+        if let index = mode.scopeIndex { editScope.selectedSegmentIndex = index }
+        // Destructive tint while delete is armed, so the state is legible
+        // without reading the segment label.
+        editScope.selectedSegmentTintColor = (mode == .delete) ? .systemRed : nil
     }
 
     @objc private func tabChanged() {
@@ -208,17 +219,16 @@ final class MessagesViewController: MSMessagesAppViewController {
         grid.filter = filterForSelectedTab()
     }
 
-    /// Each button toggles its own mode off, and switches directly into it
-    /// from the other — so going from favoriting to deleting is one tap, not
-    /// Done-then-Delete.
+    /// Always enters at `entryMode`, never the mode last used — editing must
+    /// not begin armed to delete.
     @objc private func editTapped() {
         guard grid != nil else { return }
-        setEditMode(grid.editMode == .favorites ? .off : .favorites)
+        setEditMode(grid.editMode == .off ? StickerEditMode.entryMode : .off)
     }
 
-    @objc private func deleteTapped() {
-        guard grid != nil else { return }
-        setEditMode(grid.editMode == .delete ? .off : .delete)
+    @objc private func editScopeChanged() {
+        guard grid != nil, grid.editMode != .off else { return }
+        setEditMode(StickerEditMode.mode(forScopeIndex: editScope.selectedSegmentIndex))
     }
 
     private func showFatal(_ message: String) {
