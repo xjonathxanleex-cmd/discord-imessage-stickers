@@ -1,5 +1,4 @@
-import UIKit
-import ImageIO
+import Foundation
 
 public enum DraftFetchError: Equatable, Error {
     case unreachable
