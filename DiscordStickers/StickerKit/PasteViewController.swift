@@ -94,6 +94,20 @@ public final class PasteViewController: UIViewController {
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         view.addSubview(stack)
+
+        // Gives this view an intrinsic height, so whatever embeds it can size
+        // itself from the content instead of guessing. A hard-coded height in
+        // the host silently clipped this stack's whole bottom row once two
+        // later features each appended a button to it — invisible to every
+        // test, because the constant lived in a different target.
+        //
+        // .defaultHigh so a host that hides this view (UIStackView sets a
+        // required zero-height constraint) wins without a conflict.
+        let stackBottom = stack.bottomAnchor.constraint(equalTo: view.bottomAnchor,
+                                                        constant: -8)
+        stackBottom.priority = .defaultHigh
+        stackBottom.isActive = true
+
         NSLayoutConstraint.activate([
             stack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor,
@@ -350,12 +364,18 @@ public final class PasteViewController: UIViewController {
         await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
             let box = SingleResume(continuation)
 
-            provider.loadDataRepresentation(for: .image) { data, _ in
+            let progress = provider.loadDataRepresentation(for: .image) { data, _ in
                 box.resume(with: data)
             }
 
             Task {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
+                // Cancel rather than merely abandon. The returned Progress was
+                // previously discarded, so a timed-out load kept running and
+                // kept decoding a full-resolution photo into a buffer nobody
+                // would ever read — against a 40-120 MB kill ceiling, with the
+                // user still in the drawer picking more.
+                progress.cancel()
                 box.resume(with: nil)
             }
         }

@@ -91,14 +91,12 @@ final class MessagesViewController: MSMessagesAppViewController {
 
         paste.didMove(toParent: self)
 
-        // Required priority would conflict with the stack view's own
-        // required-priority zero-size constraint when pasteContainer is
-        // hidden (UISV-hiding); .defaultHigh lets that one win without any
-        // console warnings, and the layout still collapses correctly.
-        let pasteContainerHeight = pasteContainer.heightAnchor.constraint(equalToConstant: 76)
-        pasteContainerHeight.priority = .defaultHigh
-        pasteContainerHeight.isActive = true
-
+        // No fixed height here on purpose. This was 76pt, sized when the paste
+        // view held a button, a spinner and a label; Paste Link and Add Photos
+        // were appended by two later features and the container never grew, so
+        // both were clipped out of sight and the features looked unbuilt. The
+        // container now takes its height from the paste view's own content,
+        // which cannot fall out of date.
         NSLayoutConstraint.activate([
             paste.view.topAnchor.constraint(equalTo: pasteContainer.topAnchor),
             paste.view.bottomAnchor.constraint(equalTo: pasteContainer.bottomAnchor),

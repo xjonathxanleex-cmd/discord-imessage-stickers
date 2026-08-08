@@ -97,6 +97,13 @@ public final class StickerCell: UICollectionViewCell {
                           onToggleFavorite: @escaping () -> Void,
                           onDelete: @escaping () -> Void) {
         stickerView.sticker = sticker
+        // Assigning `.sticker` does NOT begin playback. Device testing found
+        // animated stickers frozen in the grid while animating correctly once
+        // sent into a conversation — the format was always fine, nobody had
+        // pressed play. `MSStickerView.h` documents startAnimating/
+        // stopAnimating but never states that assignment starts anything, and
+        // the simulator cannot reveal the difference.
+        stickerView.startAnimating()
         self.onTap = onTap
         self.onToggleFavorite = onToggleFavorite
         self.onDelete = onDelete
@@ -113,6 +120,10 @@ public final class StickerCell: UICollectionViewCell {
 
     public override func prepareForReuse() {
         super.prepareForReuse()
+        // Stop before clearing: a recycled cell that keeps ticking is the same
+        // class of leak as one that keeps its decoded image, and the extension
+        // is killed somewhere between 40 and 120 MB.
+        stickerView.stopAnimating()
         stickerView.sticker = nil
         stickerView.isUserInteractionEnabled = true
         starButton.isHidden = true
