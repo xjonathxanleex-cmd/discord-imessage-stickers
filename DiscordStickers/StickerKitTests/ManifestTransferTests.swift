@@ -219,4 +219,26 @@ final class ManifestTransferTests: XCTestCase {
         XCTAssertEqual(StubURLProtocol.requestedURLs.first?.lastPathComponent, "111.png")
         XCTAssertTrue(outcome.missing.contains("sha256-abcdef0123456789"))
     }
+
+    func testRestoreRequestsSevenTVEmotesFromSevenTV() async throws {
+        let entries = [
+            StickerEntry(id: "01G3WEGZN0000ET2J0MQP5YJ0G", name: "GAMBA",
+                         source: .sevenTV,
+                         addedAt: Date(timeIntervalSince1970: 1000),
+                         useCount: 0),
+            StickerEntry(id: "111", name: "wave", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 2000),
+                         useCount: 0),
+        ]
+
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
+
+        _ = await ManifestTransfer.restore(entries, store: store,
+                                           downloader: makeDownloader())
+
+        let hosts = Set(StubURLProtocol.requestedURLs.compactMap(\.host))
+        XCTAssertEqual(hosts, ["cdn.7tv.app", "cdn.discordapp.com"],
+                       "each sticker must be fetched from its own service")
+        XCTAssertEqual(store.all().count, 2)
+    }
 }

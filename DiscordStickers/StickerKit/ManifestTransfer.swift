@@ -11,11 +11,13 @@ import Foundation
 ///
 /// For a Discord-sourced sticker, a re-paste already restores names and
 /// images from the CDN, so what this genuinely rescues is `useCount`,
-/// `favoritedAt`, and `isAnimated` — the pieces of data in the app that
-/// cannot be re-derived from Discord. `isAnimated` in particular must
-/// survive intact: the CDN returns 415 for an emoji requested with the
+/// `favoritedAt`, `isAnimated`, and `source` — the pieces of data in the
+/// app that cannot be re-derived from Discord. `isAnimated` in particular
+/// must survive intact: the CDN returns 415 for an emoji requested with the
 /// wrong extension, so losing the flag doesn't merely degrade a restored
-/// sticker, it can break the request for it.
+/// sticker, it can break the request for it. `source` must survive too:
+/// the downloader picks a CDN from it, so losing it sends 7TV ids to
+/// Discord's CDN and reports the user's own 7TV emotes as missing.
 ///
 /// Text rather than a file, because text survives being pasted into a note
 /// and retrieved a week later, and because file-sharing UI inside a
@@ -90,7 +92,8 @@ public enum ManifestTransfer {
 
         let downloaded = await downloader.download(
             redownloadable.map {
-                ParsedEmoji(id: $0.id, name: $0.name, isAnimated: $0.isAnimated)
+                ParsedEmoji(id: $0.id, name: $0.name,
+                            isAnimated: $0.isAnimated, source: $0.source)
             }
         )
 
