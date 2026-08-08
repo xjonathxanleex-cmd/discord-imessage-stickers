@@ -124,9 +124,14 @@ public final class PasteViewController: UIViewController {
 
     @MainActor
     private func handle(_ text: String) {
-        let parsed = EmojiMarkupParser.parse(text)
+        // Route on the payload's own first line rather than asking the user
+        // which format they copied. Both parsers reject the other's format
+        // outright, so a misroute yields nothing rather than something wrong.
+        let parsed = TransferPayloadParser.looksLikePayload(text)
+            ? TransferPayloadParser.parse(text)
+            : EmojiMarkupParser.parse(text)
         guard !parsed.isEmpty else {
-            statusLabel.text = "No Discord emoji found in what you pasted."
+            statusLabel.text = "No emoji found in what you pasted."
             return
         }
 
