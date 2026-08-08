@@ -176,4 +176,93 @@ final class EmojiDownloaderTests: XCTestCase {
             + outcome.missing.count + outcome.unusable.count
         XCTAssertEqual(total, 2)
     }
+
+    private func animatedEmoji(_ id: String, _ name: String) -> ParsedEmoji {
+        ParsedEmoji(id: id, name: name, isAnimated: true)
+    }
+
+    func testRequestsGIFForAnimatedEmoji() async throws {
+        StubURLProtocol.handler = { _ in
+            (200, self.temp.makeAnimatedGIFData(frameCount: 6))
+        }
+
+        _ = await makeDownloader().download([animatedEmoji("111", "cuh")])
+
+        XCTAssertEqual(StubURLProtocol.requestedURLs.first?.lastPathComponent,
+                       "111.gif")
+        XCTAssertNil(StubURLProtocol.requestedURLs.first?.query)
+    }
+
+    func testRequestsPNGForStaticEmoji() async throws {
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
+
+        _ = await makeDownloader().download([emoji("111", "wave")])
+
+        XCTAssertEqual(StubURLProtocol.requestedURLs.first?.lastPathComponent,
+                       "111.png")
+    }
+
+    func testStoresAnimatedFlagOnTheEntry() async throws {
+        StubURLProtocol.handler = { _ in
+            (200, self.temp.makeAnimatedGIFData(frameCount: 6))
+        }
+
+        _ = await makeDownloader().download([animatedEmoji("111", "cuh")])
+
+        XCTAssertEqual(store.all().first?.isAnimated, true)
+    }
+
+    func testRetriesWithPNGWhenGIFReturns415() async throws {
+        // A wrong isAnimated flag: the CDN answers 415 for a static emoji
+        // requested as .gif. Retrying self-heals it instead of reporting a
+        // puzzling failure.
+        StubURLProtocol.handler = { request in
+            request.url?.lastPathComponent == "111.gif"
+                ? (415, Data())
+                : (200, self.pngData(width: 128))
+        }
+
+        let outcome = await makeDownloader().download([animatedEmoji("111", "cuh")])
+
+        XCTAssertEqual(outcome.added, ["111"])
+        XCTAssertEqual(StubURLProtocol.requestedURLs.map(\.lastPathComponent),
+                       ["111.gif", "111.png"])
+        XCTAssertEqual(store.all().first?.isAnimated, false,
+                       "the corrected flag must be what gets stored")
+    }
+
+    func testRetriesWithGIFWhenPNGReturns415() async throws {
+        StubURLProtocol.handler = { request in
+            request.url?.lastPathComponent == "111.png"
+                ? (415, Data())
+                : (200, self.temp.makeAnimatedGIFData(frameCount: 6))
+        }
+
+        let outcome = await makeDownloader().download([emoji("111", "wave")])
+
+        XCTAssertEqual(outcome.added, ["111"])
+        XCTAssertEqual(store.all().first?.isAnimated, true)
+    }
+
+    func testRejectsWhenBothExtensions415() async throws {
+        StubURLProtocol.handler = { _ in (415, Data()) }
+
+        let outcome = await makeDownloader().download([animatedEmoji("111", "cuh")])
+
+        XCTAssertEqual(outcome.unusable, ["111"])
+        XCTAssertTrue(store.all().isEmpty)
+    }
+
+    func testAnimatedSourceWithOneFrameIsStoredAsStatic() async throws {
+        // Fewer than two frames is not animation. It must route to the static
+        // processor rather than being rejected.
+        StubURLProtocol.handler = { _ in
+            (200, self.temp.makeAnimatedGIFData(frameCount: 1))
+        }
+
+        let outcome = await makeDownloader().download([animatedEmoji("111", "cuh")])
+
+        XCTAssertEqual(outcome.added, ["111"])
+        XCTAssertEqual(store.all().first?.isAnimated, false)
+    }
 }
