@@ -1,8 +1,9 @@
 import Foundation
 import Messages
 
-/// Fetches emoji from Discord's public CDN, validates them against
-/// `MSSticker`'s limits, and hands survivors to `StickerStore`.
+/// Fetches emoji from their source CDN — Discord's or 7TV's, depending on
+/// each `ParsedEmoji`'s `source` — validates them against `MSSticker`'s
+/// limits, and hands survivors to `StickerStore`.
 ///
 /// Nothing here throws to the caller: every failure is recorded in the
 /// returned `DownloadOutcome`, because a partial batch is the expected case
@@ -109,9 +110,14 @@ public final class EmojiDownloader: Sendable {
         case .success(let raw):
             return process(emoji, raw: raw, animated: emoji.isAnimated)
         case .unsupportedType:
-            // The flag disagreed with reality. The CDN returns 415 for a
-            // static emoji requested as .gif, so retry with the other
-            // extension and store whichever answer actually worked.
+            // The flag disagreed with reality. This self-heal is Discord-
+            // specific: Discord's CDN returns 415 for a static emoji
+            // requested as .gif, so retrying with the other extension and
+            // storing whichever answer actually worked corrects a wrong
+            // guess there. 7TV does not behave this way — see
+            // `TransferPayloadParser`'s doc comment — so this branch is
+            // simply never reached for a `.sevenTV` emoji; the tag itself
+            // must already be right.
             switch await fetch(emoji, animated: !emoji.isAnimated) {
             case .success(let raw):
                 return process(emoji, raw: raw, animated: !emoji.isAnimated)
@@ -129,7 +135,7 @@ public final class EmojiDownloader: Sendable {
     /// ImageIO's animated-WebP frame support is unverified here.
     private static func url(for emoji: ParsedEmoji, animated: Bool) -> URL? {
         switch emoji.source {
-        case .pasted, .server, .photo, .link:
+        case .pasted, .server:
             let ext = animated ? "gif" : "png"
             return URL(string:
                 "https://cdn.discordapp.com/emojis/\(emoji.id).\(ext)")
@@ -137,6 +143,16 @@ public final class EmojiDownloader: Sendable {
             let file = animated ? "4x.gif" : "4x.webp"
             return URL(string:
                 "https://cdn.7tv.app/emote/\(emoji.id)/\(file)")
+        case .photo, .link:
+            // Content-addressed: the id is a `sha256-…` hash of bytes that
+            // existed only on this device, with no remote origin at all.
+            // Returning nil here (rather than folding these into the
+            // Discord case) makes "no such thing as a request for this
+            // source" an invariant of the switch itself, so any future
+            // caller — a retry button, a repair pass, a sync path — fails
+            // closed instead of having to separately know to check the
+            // `sha256-` prefix the way `ManifestTransfer` does today.
+            return nil
         }
     }
 

@@ -310,6 +310,23 @@ final class EmojiDownloaderTests: XCTestCase {
         XCTAssertEqual(store.all().first?.source, .sevenTV)
     }
 
+    func testContentAddressedEntriesAreNeverRequestedFromACDN() async throws {
+        // .photo and .link entries are content-addressed (sha256-…) with no
+        // remote origin at all. Nothing sends this today only because
+        // ManifestTransfer partitions on the "sha256-" prefix in a different
+        // file — a future caller that skips that check must still fail
+        // closed here rather than firing a bogus request.
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
+
+        let outcome = await makeDownloader().download([
+            ParsedEmoji(id: "sha256-abcdef0123456789", name: "my photo",
+                       isAnimated: false, source: .photo)
+        ])
+
+        XCTAssertTrue(StubURLProtocol.requestedURLs.isEmpty)
+        XCTAssertEqual(outcome.unusable, ["sha256-abcdef0123456789"])
+    }
+
     func testDiscordEmojiStillUseTheDiscordCDN() async throws {
         // The regression guard for this task: adding a second source must not
         // change where Discord emoji come from.
