@@ -61,12 +61,23 @@ A line-based text format, chosen over JSON because QR capacity is the binding co
 DSTK1
 d 1481800758532903104 67
 d 1095953169969860649 NOWAY
-7 01F6MZGCNG000255K4X1K7EMS7 catJAM
+7a 01F6MZGCNG000255K4X1K7EMS7 catJAM
 ```
 
 - **Line 1** is the literal magic `DSTK1` — format name and version. A payload without it is rejected outright, so pasting unrelated text produces a clear message rather than a confusing partial import.
-- **Each subsequent line:** a one-character source tag, a space, the id, a space, the name. The name runs to end of line and may contain spaces; ids never do, so a two-way split is unambiguous.
-- **Source tags:** `d` = Discord, `7` = 7TV. One character because every byte costs QR capacity.
+- **Each subsequent line:** a source tag, a space, the id, a space, the name. The name runs to end of line and may contain spaces; ids never do, so a two-way split is unambiguous. Still one whitespace-delimited token per tag, so QR capacity and the split are both unaffected by the animated variant below.
+- **Source tags:**
+
+  | Tag | Meaning |
+  |---|---|
+  | `d` | Discord, static |
+  | `da` | Discord, animated |
+  | `7` | 7TV, static |
+  | `7a` | 7TV, animated |
+
+  One or two characters, because every byte costs QR capacity. The trailing `a` carries whether the emote is animated — the producing side always knows this (7TV's API returns an `animated` boolean per emote; Discord markup encodes it as the leading `a` in `<a:name:id>`), so the page must emit the right tag rather than leaving the phone to guess.
+
+  **7TV does not self-heal a wrong format guess.** Discord's CDN returns HTTP 415 for a static emoji requested as `.gif`, which the phone's downloader catches and retries with the other extension. 7TV has no equivalent: requesting `4x.webp` for an *animated* 7TV emote returns **HTTP 200 with a valid — but static-only — WebP**, so a wrong guess there doesn't fail, it silently produces a still image that looks correct until the user notices it never moves. This is exactly what §3's animated flag exists to prevent.
 - Blank lines and unparseable lines are skipped, not fatal — one malformed line must not lose the other 200.
 
 Roughly 35 bytes per emoji.

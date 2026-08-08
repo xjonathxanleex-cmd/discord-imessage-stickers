@@ -150,6 +150,24 @@ public final class StickerStore: @unchecked Sendable {
         }
     }
 
+    /// Overwrites a stored entry's non-identity fields from a backup.
+    ///
+    /// `restore` re-downloads through `EmojiDownloader`, which necessarily
+    /// creates a fresh entry — so every field that is not part of a
+    /// `ParsedEmoji` is lost unless it is written back. Four separate fields
+    /// have been lost this way one at a time; copying the whole record is
+    /// what stops a fifth.
+    public func restoreMetadata(from backup: StickerEntry) {
+        queue.sync {
+            guard let index = entries.firstIndex(where: { $0.id == backup.id })
+            else { return }
+            entries[index].useCount = backup.useCount
+            entries[index].favoritedAt = backup.favoritedAt
+            entries[index].addedAt = backup.addedAt
+            scheduleWriteLocked()
+        }
+    }
+
     /// Writes any pending manifest change immediately. Call before the
     /// extension is likely to be suspended or killed.
     public func flush() {

@@ -41,6 +41,23 @@ file extension, and photo import detects it from bytes. 7TV simply tells us.
 | `2x.webp` | 200 | 223,606 | WebP |
 | `1x.webp` | 200 | 72,376 | WebP |
 
+Two more measurements, taken specifically to settle whether a wrong `isAnimated` guess
+would ever surface as an error the way Discord's does:
+
+| Request | Emote | Status | Bytes |
+|---|---|---|---|
+| `4x.webp` | **animated** emote | **200** | 572,384 |
+| `4x.gif` | **static** emote | **404** | — |
+
+Neither result is a Discord-style 415. An animated emote fetched as `4x.webp` (the "static"
+request) returns 200 with a genuinely valid image — just the wrong one, a still frame in
+place of motion — so guessing wrong here produces no error at all, only a sticker that quietly
+never animates. And "always request `.gif` to be safe" is not a workaround either: `4x.gif` on
+a *static* emote 404s outright, which would break every static 7TV import. The only correct
+approach is to know `animated` before requesting anything, which is exactly why the transfer
+payload's source tag now carries it (`7`/`7a`, `d`/`da` — see the desktop companion design
+spec §3) rather than leaving the phone to infer or retry its way to the right format.
+
 Two things follow:
 
 1. **`4x.webp` is 572 KB — over `MSSticker`'s 500 KB limit on the wire.** It does not matter

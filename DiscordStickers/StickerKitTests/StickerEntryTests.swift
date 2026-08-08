@@ -157,10 +157,15 @@ final class StickerEntryTests: XCTestCase {
     }
 
     func testAllStickerSourcesRoundTripThroughJSON() throws {
-        // Cases may be added but never renamed or removed: StickerSource is
-        // String-raw-valued, so an unknown case fails to decode the entire
-        // entry, silently losing a sticker the user already had.
-        for source in [StickerSource.pasted, .server, .photo, .link] {
+        // Driven from allCases rather than a hardcoded list: .sevenTV was
+        // added in separate bespoke tests instead of here, the fourth
+        // feature in a row to add a case. Iterating allCases is what makes
+        // omitting a case from this coverage impossible rather than a
+        // review catch — cases may be added but never renamed or removed,
+        // since StickerSource is String-raw-valued and an unknown case
+        // fails to decode the entire entry, silently losing a sticker the
+        // user already had.
+        for source in StickerSource.allCases {
             let entry = StickerEntry(id: "1", name: "a", source: source,
                                      addedAt: Date(timeIntervalSince1970: 0),
                                      useCount: 0)
@@ -178,10 +183,20 @@ final class StickerEntryTests: XCTestCase {
 
     func testStickerSourceRawValuesAreStable() {
         // These strings are written into manifest.json on the user's device.
-        // Changing one orphans every sticker already stored with it.
-        XCTAssertEqual(StickerSource.pasted.rawValue, "pasted")
-        XCTAssertEqual(StickerSource.server.rawValue, "server")
-        XCTAssertEqual(StickerSource.photo.rawValue, "photo")
-        XCTAssertEqual(StickerSource.link.rawValue, "link")
+        // Changing one orphans every sticker already stored with it. Driven
+        // from allCases through an exhaustive switch (no `default`) so that
+        // adding a new case without pinning its raw value here is a compile
+        // error, not a silent gap.
+        for source in StickerSource.allCases {
+            let expected: String
+            switch source {
+            case .pasted:  expected = "pasted"
+            case .server:  expected = "server"
+            case .photo:   expected = "photo"
+            case .link:    expected = "link"
+            case .sevenTV: expected = "sevenTV"
+            }
+            XCTAssertEqual(source.rawValue, expected)
+        }
     }
 }

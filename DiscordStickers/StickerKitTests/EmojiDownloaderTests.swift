@@ -265,4 +265,77 @@ final class EmojiDownloaderTests: XCTestCase {
         XCTAssertEqual(outcome.added, ["111"])
         XCTAssertEqual(store.all().first?.isAnimated, false)
     }
+
+    private func sevenTVEmoji(_ id: String, _ name: String,
+                              animated: Bool) -> ParsedEmoji {
+        ParsedEmoji(id: id, name: name, isAnimated: animated, source: .sevenTV)
+    }
+
+    func testRequestsTheSevenTVCDNForSevenTVEmotes() async throws {
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
+
+        _ = await makeDownloader().download([
+            sevenTVEmoji("01G3WEGZN0000ET2J0MQP5YJ0G", "GAMBA", animated: false)
+        ])
+
+        let url = try XCTUnwrap(StubURLProtocol.requestedURLs.first)
+        XCTAssertEqual(url.host, "cdn.7tv.app")
+        XCTAssertEqual(url.path,
+                       "/emote/01G3WEGZN0000ET2J0MQP5YJ0G/4x.webp")
+    }
+
+    func testRequestsGIFForAnimatedSevenTVEmotes() async throws {
+        // .gif is not advertised in 7TV's own host.files list but is served,
+        // and is chosen over animated WebP because ImageIO's animated-WebP
+        // frame support is unverified on this platform.
+        StubURLProtocol.handler = { _ in
+            (200, self.temp.makeAnimatedGIFData(frameCount: 6))
+        }
+
+        _ = await makeDownloader().download([
+            sevenTVEmoji("01G3WEGZN0000ET2J0MQP5YJ0G", "GAMBA", animated: true)
+        ])
+
+        XCTAssertEqual(StubURLProtocol.requestedURLs.first?.lastPathComponent,
+                       "4x.gif")
+    }
+
+    func testStoresTheSevenTVSourceOnTheEntry() async throws {
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
+
+        _ = await makeDownloader().download([
+            sevenTVEmoji("01G3WEGZN0000ET2J0MQP5YJ0G", "GAMBA", animated: false)
+        ])
+
+        XCTAssertEqual(store.all().first?.source, .sevenTV)
+    }
+
+    func testContentAddressedEntriesAreNeverRequestedFromACDN() async throws {
+        // .photo and .link entries are content-addressed (sha256-…) with no
+        // remote origin at all. Nothing sends this today only because
+        // ManifestTransfer partitions on the "sha256-" prefix in a different
+        // file — a future caller that skips that check must still fail
+        // closed here rather than firing a bogus request.
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
+
+        let outcome = await makeDownloader().download([
+            ParsedEmoji(id: "sha256-abcdef0123456789", name: "my photo",
+                       isAnimated: false, source: .photo)
+        ])
+
+        XCTAssertTrue(StubURLProtocol.requestedURLs.isEmpty)
+        XCTAssertEqual(outcome.unusable, ["sha256-abcdef0123456789"])
+    }
+
+    func testDiscordEmojiStillUseTheDiscordCDN() async throws {
+        // The regression guard for this task: adding a second source must not
+        // change where Discord emoji come from.
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
+
+        _ = await makeDownloader().download([emoji("111", "wave")])
+
+        let url = try XCTUnwrap(StubURLProtocol.requestedURLs.first)
+        XCTAssertEqual(url.host, "cdn.discordapp.com")
+        XCTAssertEqual(url.path, "/emojis/111.png")
+    }
 }

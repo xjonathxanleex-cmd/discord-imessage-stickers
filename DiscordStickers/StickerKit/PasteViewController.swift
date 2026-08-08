@@ -55,7 +55,7 @@ public final class PasteViewController: UIViewController {
         let pasteButton = UIButton(configuration: pasteConfiguration)
         pasteButton.addTarget(self, action: #selector(pasteTapped), for: .touchUpInside)
 
-        statusLabel.text = "Copy Discord emoji, then paste them here."
+        statusLabel.text = "Copy Discord or 7TV emoji, then paste them here."
         statusLabel.font = .preferredFont(forTextStyle: .footnote)
         statusLabel.textColor = .secondaryLabel
         statusLabel.textAlignment = .center
@@ -124,9 +124,14 @@ public final class PasteViewController: UIViewController {
 
     @MainActor
     private func handle(_ text: String) {
-        let parsed = EmojiMarkupParser.parse(text)
+        // Route on the payload's own first line rather than asking the user
+        // which format they copied. Both parsers reject the other's format
+        // outright, so a misroute yields nothing rather than something wrong.
+        let parsed = TransferPayloadParser.looksLikePayload(text)
+            ? TransferPayloadParser.parse(text)
+            : EmojiMarkupParser.parse(text)
         guard !parsed.isEmpty else {
-            statusLabel.text = "No Discord emoji found in what you pasted."
+            statusLabel.text = "No emoji found in what you pasted."
             return
         }
 

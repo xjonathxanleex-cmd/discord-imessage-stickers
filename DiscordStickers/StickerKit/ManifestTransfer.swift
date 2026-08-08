@@ -2,20 +2,30 @@ import Foundation
 
 /// Moves the manifest in and out as clipboard text.
 ///
-/// A backup restores Discord-sourced stickers only. The manifest carries
-/// names and ids, never image bytes, so this can only bring a sticker back
-/// by re-fetching it from Discord's CDN using that id. Link and photo
-/// imports have no such source: their id is a content hash of bytes that
-/// existed only on this device, so they cannot be recovered by this feature
-/// at all — `restore` reports them as missing without attempting a request.
+/// A backup restores stickers with a real remote origin — Discord and 7TV
+/// alike, dispatched by `source` — by re-fetching each from its own CDN
+/// using its id. Link and photo imports have no such origin: their id is a
+/// content hash of bytes that existed only on this device, so they cannot
+/// be recovered by this feature at all — `restore` reports them as missing
+/// without attempting a request.
 ///
-/// For a Discord-sourced sticker, a re-paste already restores names and
-/// images from the CDN, so what this genuinely rescues is `useCount`,
-/// `favoritedAt`, and `isAnimated` — the pieces of data in the app that
-/// cannot be re-derived from Discord. `isAnimated` in particular must
-/// survive intact: the CDN returns 415 for an emoji requested with the
-/// wrong extension, so losing the flag doesn't merely degrade a restored
-/// sticker, it can break the request for it.
+/// For a re-fetchable sticker, a re-paste (or a re-scan of a 7TV payload)
+/// already restores names and images from the origin CDN, so what this
+/// genuinely rescues is everything about it that isn't part of a
+/// `ParsedEmoji`: `useCount`, `favoritedAt`, `addedAt`, `isAnimated`, and
+/// `source` — the pieces of data in the app that cannot be re-derived from
+/// the origin. `isAnimated` in particular must survive intact for a
+/// Discord-sourced entry: the CDN returns 415 for an emoji requested with
+/// the wrong extension, so losing the flag doesn't merely degrade a
+/// restored sticker, it can break the request for it. `source` must
+/// survive too: the downloader picks a CDN from it, so losing it sends 7TV
+/// ids to Discord's CDN and reports the user's own 7TV emotes as missing.
+///
+/// `favoritedAt`, then `isAnimated`, then `source`, then `addedAt` — four
+/// fields have now been lost on this path one at a time, each only caught
+/// by a dedicated test. `StickerStore.restoreMetadata(from:)` copies the
+/// whole backup record onto the freshly re-downloaded entry instead, which
+/// is what stops a fifth field being lost the same way.
 ///
 /// Text rather than a file, because text survives being pasted into a note
 /// and retrieved a week later, and because file-sharing UI inside a
@@ -53,26 +63,20 @@ public enum ManifestTransfer {
         return entries
     }
 
-    /// Re-downloads every listed entry whose id names an actual Discord
-    /// emoji, then replays the saved use counts and favorites so Recents and
-    /// Favorites come back correctly rather than empty. Entries whose id is
-    /// content-addressed (`sha256-…`, from link and photo imports) are never
-    /// sent to `downloader` — there is nothing at Discord to ask for — and
-    /// are routed straight into the returned outcome's `missing` bucket
-    /// instead.
+    /// Re-downloads every listed entry with a real remote origin, then
+    /// writes each one's saved metadata back via
+    /// `StickerStore.restoreMetadata(from:)` so Recents, Favorites, and
+    /// "added" order all come back as they were rather than reset. Entries
+    /// whose id is content-addressed (`sha256-…`, from link and photo
+    /// imports) are never sent to `downloader` — there is nothing to ask
+    /// any origin for — and are routed straight into the returned outcome's
+    /// `missing` bucket instead.
     ///
-    /// The use-count replay *adds* recordings on top of whatever the store
-    /// already has for that id rather than reconciling to the saved value —
-    /// fine for the intended case of restoring into a fresh store after a
-    /// reinstall, but calling this against a store that already has activity
-    /// for an id will inflate its count rather than overwrite it.
-    ///
-    /// The favorites replay calls `setFavorite` in ascending `favoritedAt`
-    /// order. `StickerStore.setFavorite` stamps `Date()` at call time rather
-    /// than preserving the original timestamp, so the *order of these calls*
-    /// — not the original timestamps — is what determines the restored
-    /// `favorites()` order. Sorting ascending first is what makes that order
-    /// match the order the user originally built.
+    /// Because `restoreMetadata` copies the backup's `useCount` and
+    /// `favoritedAt` directly rather than replaying them onto whatever the
+    /// store already has, restoring into a store that already has activity
+    /// for an id overwrites that activity with the backup's values, rather
+    /// than the additive behaviour an earlier implementation had.
     public static func restore(
         _ entries: [StickerEntry],
         store: StickerStore,
@@ -81,16 +85,16 @@ public enum ManifestTransfer {
         // Content-addressed entries cannot be re-fetched from anywhere —
         // their bytes existed only on this device — so they're partitioned
         // out before any request is made. Sending one to the downloader
-        // would build `https://cdn.discordapp.com/emojis/sha256-….<ext>`,
-        // a request for an object that never existed there, and report the
-        // sticker back as "no longer exists" — implying Discord deleted it,
-        // when in fact Discord never had it.
+        // would build a request for an object that never existed at any
+        // origin, and report the sticker back as "no longer exists" —
+        // implying its origin deleted it, when in fact it was never there.
         let redownloadable = entries.filter { !$0.id.hasPrefix(contentHashPrefix) }
         let unrecoverable = entries.filter { $0.id.hasPrefix(contentHashPrefix) }
 
         let downloaded = await downloader.download(
             redownloadable.map {
-                ParsedEmoji(id: $0.id, name: $0.name, isAnimated: $0.isAnimated)
+                ParsedEmoji(id: $0.id, name: $0.name,
+                            isAnimated: $0.isAnimated, source: $0.source)
             }
         )
 
@@ -102,14 +106,7 @@ public enum ManifestTransfer {
         )
 
         for entry in entries where store.contains(id: entry.id) {
-            for _ in 0..<entry.useCount { store.recordUse(id: entry.id) }
-        }
-
-        let favorited = entries
-            .filter { $0.favoritedAt != nil }
-            .sorted { $0.favoritedAt! < $1.favoritedAt! }
-        for entry in favorited where store.contains(id: entry.id) {
-            store.setFavorite(true, id: entry.id)
+            store.restoreMetadata(from: entry)
         }
 
         store.flush()

@@ -6,11 +6,12 @@ import Foundation
 /// **added** freely but never renamed or removed — an unknown raw value
 /// fails to decode the whole entry, silently losing a sticker the user
 /// already had.
-public enum StickerSource: String, Codable {
+public enum StickerSource: String, Codable, CaseIterable {
     case pasted
     case server
     case photo
     case link
+    case sevenTV
 }
 
 /// One row of `manifest.json`. Every entry that reaches the manifest has had
@@ -19,7 +20,7 @@ public struct StickerEntry: Codable, Equatable {
     public let id: String
     public let name: String
     public let source: StickerSource
-    public let addedAt: Date
+    public var addedAt: Date
     public var useCount: Int
 
     /// `nil` means not a favorite. One optional carries both membership and
