@@ -95,4 +95,34 @@ final class PhotoDraftLoaderTests: XCTestCase {
     func testAnEmptyInputProducesNoDrafts() {
         XCTAssertTrue(PhotoDraftLoader.drafts(from: []).isEmpty)
     }
+
+    func testRejectsAnOversizedByteCount() {
+        // The byte cap is checked before anything is decoded, so junk bytes
+        // over the cap are enough — no valid image is needed to prove it.
+        let oversized = Data(repeating: 0x41,
+                             count: StickerLimits.maxSourceBytes + 1)
+        XCTAssertNil(PhotoDraftLoader.draft(from: oversized))
+    }
+
+    func testRejectsAnOversizedPixelDimension() {
+        // Flat, solid-fill artwork compresses tiny regardless of pixel
+        // count, so only a metadata-based dimension check catches this —
+        // the byte cap alone would not.
+        let huge = png(width: StickerLimits.maxSourcePixelDimension + 4, height: 8)
+        XCTAssertNil(PhotoDraftLoader.draft(from: huge))
+    }
+
+    func testDraftFromASingleImageMatchesTheBatchPath() throws {
+        let data = png(width: 200, height: 150)
+
+        let single = try XCTUnwrap(PhotoDraftLoader.draft(from: data))
+        let batch = try XCTUnwrap(PhotoDraftLoader.drafts(from: [data]).first)
+
+        XCTAssertEqual(single.imageData, batch.imageData)
+        XCTAssertEqual(single.isAnimated, batch.isAnimated)
+        XCTAssertEqual(single.origin, batch.origin)
+        // Only the name differs: `draft(from:)` returns a placeholder that
+        // `drafts(from:)` renumbers.
+        XCTAssertEqual(batch.name, "photo 1")
+    }
 }

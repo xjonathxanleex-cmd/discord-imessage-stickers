@@ -25,10 +25,16 @@ public final class PasteViewController: UIViewController {
     private let linkButton = UIButton(type: .system)
     private let photoButton = UIButton(type: .system)
 
-    /// Guards against a second tap starting a second fetch while the first
-    /// is still in flight. Without this, UIKit silently drops the second
-    /// `present(_:)` call and that draft is lost with no error shown.
-    private var isFetchingLink = false
+    /// Guards against a second import starting while one is already in
+    /// flight, on either the link or the photo path. Without this, UIKit
+    /// silently drops the second `present(_:)` call and that draft is lost
+    /// with no error shown. Covers both paths with one flag because they
+    /// share the same failure mode and the same modal presentation: a photo
+    /// pick landing mid-link-fetch (or vice versa) would lose one of them
+    /// exactly as silently as two taps on the same button. Set on entry to
+    /// `linkTapped` / `photosTapped`, cleared on every exit — cancel,
+    /// failure, and after the review screen finishes or is dismissed.
+    private var isImporting = false
 
     public init(store: StickerStore, downloader: EmojiDownloader) {
         self.store = store
@@ -206,7 +212,7 @@ public final class PasteViewController: UIViewController {
     /// alert. Acceptable here for the same reason Restore accepts it: this is
     /// an occasional action, not the app's core loop.
     @objc private func linkTapped() {
-        guard !isFetchingLink else { return }
+        guard !isImporting else { return }
 
         guard let text = UIPasteboard.general.string,
               let link = LinkParser.parse(text) else {
@@ -222,7 +228,7 @@ public final class PasteViewController: UIViewController {
             return
         }
 
-        isFetchingLink = true
+        isImporting = true
         spinner.startAnimating()
         statusLabel.text = "Fetching…"
 
@@ -231,12 +237,14 @@ public final class PasteViewController: UIViewController {
             let result = await DraftFetcher().fetch(link)
 
             await MainActor.run {
-                self.isFetchingLink = false
                 self.spinner.stopAnimating()
                 switch result {
                 case .failure(let error):
+                    self.isImporting = false
                     self.statusLabel.text = self.message(for: error)
                 case .success(let draft):
+                    // isImporting stays true — presentReview's onFinished
+                    // clears it once the review screen actually finishes.
                     self.presentReview(for: [draft])
                 }
             }
@@ -244,9 +252,12 @@ public final class PasteViewController: UIViewController {
     }
 
     @objc private func photosTapped() {
+        guard !isImporting else { return }
+        isImporting = true
+
         var configuration = PHPickerConfiguration()
         configuration.filter = .images
-        configuration.selectionLimit = 0        // unlimited
+        configuration.selectionLimit = StickerLimits.maxPhotoSelection
         configuration.preferredAssetRepresentationMode = .current
 
         let picker = PHPickerViewController(configuration: configuration)
@@ -254,42 +265,94 @@ public final class PasteViewController: UIViewController {
         present(picker, animated: true)
     }
 
-    /// Loads every picked item's raw data, preserving the order the user
-    /// chose. `loadDataRepresentation` gives the original bytes rather than a
-    /// decoded `UIImage`, which is what lets `PhotoDraftLoader` downsample
-    /// before anything is decoded at full resolution.
-    private func loadImageData(
-        from results: [PHPickerResult]
-    ) async -> [Data] {
-        await withTaskGroup(of: (Int, Data?).self) { group in
-            for (index, result) in results.enumerated() {
-                group.addTask {
-                    let provider = result.itemProvider
-                    guard provider.hasItemConformingToTypeIdentifier(
-                        UTType.image.identifier
-                    ) else { return (index, nil) }
+    /// Loads and normalizes every picked item, preserving the order the user
+    /// chose, with concurrency capped at `StickerLimits.photoLoadConcurrency`
+    /// — the same shape as `EmojiDownloader.download`: prime the group, then
+    /// add one task per completion, rather than one task per picked item.
+    ///
+    /// `PhotoDraftLoader.draft(from:)` runs *inside* each task, so the
+    /// multi-megabyte `Data` `loadDataRepresentation` hands back is released
+    /// when that task ends and only the ~400 KB downsampled payload survives
+    /// into the array below. The old shape — one task per item, every raw
+    /// `Data` collected into an array, downsampling only afterwards — kept
+    /// every picked item's full-size bytes resident at once; 20 photos at
+    /// ~3 MB alone crosses the extension's 40 MB floor before anything
+    /// decodes.
+    private func loadDrafts(from results: [PHPickerResult]) async -> [StickerDraft] {
+        await withTaskGroup(
+            of: (Int, StickerDraft?).self, returning: [StickerDraft].self
+        ) { group in
+            var nextIndex = 0
 
-                    // This SDK does not expose the async overload of
-                    // `loadDataRepresentation(for:)`, only the
-                    // completion-handler form, so it's wrapped in
-                    // `withCheckedContinuation` rather than switching to
-                    // `loadObject(ofClass: UIImage.self)`, which would decode
-                    // the image at full resolution and defeat the
-                    // downsampling this whole feature depends on.
-                    let data: Data? = await withCheckedContinuation { continuation in
-                        provider.loadDataRepresentation(for: .image) { data, _ in
-                            continuation.resume(returning: data)
-                        }
-                    }
-                    return (index, data)
+            func addTask(_ index: Int) {
+                let provider = results[index].itemProvider
+                group.addTask {
+                    (index, await Self.loadDraft(from: provider))
                 }
             }
 
-            var loaded: [(Int, Data)] = []
-            for await (index, data) in group {
-                if let data { loaded.append((index, data)) }
+            while nextIndex < min(StickerLimits.photoLoadConcurrency, results.count) {
+                addTask(nextIndex)
+                nextIndex += 1
             }
-            return loaded.sorted { $0.0 < $1.0 }.map(\.1)
+
+            var collected: [(Int, StickerDraft?)] = []
+            while let result = await group.next() {
+                collected.append(result)
+                if nextIndex < results.count {
+                    addTask(nextIndex)
+                    nextIndex += 1
+                }
+            }
+
+            // Tagged with the picker index above and sorted back into order
+            // here, since task completion order does not match selection
+            // order under a concurrency cap.
+            return collected.sorted { $0.0 < $1.0 }.compactMap(\.1)
+        }
+    }
+
+    /// Loads one picked item's raw bytes and turns them into a draft.
+    private static func loadDraft(from provider: NSItemProvider) async -> StickerDraft? {
+        guard provider.hasItemConformingToTypeIdentifier(UTType.image.identifier)
+        else { return nil }
+
+        guard let data = await loadDataRepresentation(from: provider) else { return nil }
+        return PhotoDraftLoader.draft(from: data)
+    }
+
+    /// This SDK does not expose the async overload of
+    /// `loadDataRepresentation(for:)`, only the completion-handler form, so
+    /// it's wrapped in `withCheckedContinuation` rather than switching to
+    /// `loadObject(ofClass: UIImage.self)`, which would decode the image at
+    /// full resolution and defeat the downsampling this whole feature
+    /// depends on.
+    ///
+    /// Raced against a 15 second timeout — matching `DraftFetcher`'s
+    /// deadline for a fetched link — because a provider that never invokes
+    /// its completion handler would otherwise suspend forever, leaving the
+    /// spinner spinning with no recovery. Whichever finishes first resumes
+    /// the continuation; a `SingleResume` box makes the loser's resume a
+    /// harmless no-op instead of the trap-worthy double-resume it would
+    /// otherwise be. The timeout runs as its own unstructured `Task` rather
+    /// than a second `TaskGroup` child, specifically so it is *not*
+    /// structurally awaited — a `TaskGroup` implicitly waits for every child
+    /// before returning, which would defeat the timeout for exactly the
+    /// never-calls-back case it exists to handle.
+    private static func loadDataRepresentation(
+        from provider: NSItemProvider
+    ) async -> Data? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Data?, Never>) in
+            let box = SingleResume(continuation)
+
+            provider.loadDataRepresentation(for: .image) { data, _ in
+                box.resume(with: data)
+            }
+
+            Task {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                box.resume(with: nil)
+            }
         }
     }
 
@@ -301,8 +364,13 @@ public final class PasteViewController: UIViewController {
         }
     }
 
+    /// `droppedCount` is folded into the eventual status text rather than
+    /// shown immediately: the review screen covers the status label the
+    /// instant it's presented, so anything written to `statusLabel.text`
+    /// beforehand would never be seen — only the text set in `onFinished`,
+    /// once the modal is dismissed, is.
     @MainActor
-    private func presentReview(for drafts: [StickerDraft]) {
+    private func presentReview(for drafts: [StickerDraft], droppedCount: Int = 0) {
         let review = StickerReviewViewController(drafts: drafts, store: store)
         let navigation = UINavigationController(rootViewController: review)
         // A swipe-down must not be able to bypass `onFinished` entirely —
@@ -313,11 +381,18 @@ public final class PasteViewController: UIViewController {
         review.onFinished = { [weak self, weak navigation] outcome in
             navigation?.dismiss(animated: true)
             guard let self else { return }
+            self.isImporting = false
             guard let outcome else {
                 self.statusLabel.text = "Cancelled."
                 return
             }
-            self.statusLabel.text = Self.summary(for: outcome)
+            var text = Self.summary(for: outcome)
+            if droppedCount > 0 {
+                text += " \(droppedCount) "
+                    + (droppedCount == 1 ? "photo" : "photos")
+                    + " couldn't be read."
+            }
+            self.statusLabel.text = text
             self.onFinished?(outcome)
         }
 
@@ -331,7 +406,10 @@ extension PasteViewController: PHPickerViewControllerDelegate {
                        didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
 
-        guard !results.isEmpty else { return }   // cancelled
+        guard !results.isEmpty else {   // cancelled
+            isImporting = false
+            return
+        }
 
         spinner.startAnimating()
         statusLabel.text = "Loading \(results.count) "
@@ -339,18 +417,46 @@ extension PasteViewController: PHPickerViewControllerDelegate {
 
         Task { [weak self] in
             guard let self else { return }
-            let data = await self.loadImageData(from: results)
+            // Downsampling now happens inside `loadDrafts`, one item at a
+            // time, so the spinner stops only once that work is actually
+            // done — not before it, which would read as finished while the
+            // task group is still decoding.
+            let drafts = await self.loadDrafts(from: results)
 
             await MainActor.run {
                 self.spinner.stopAnimating()
 
-                let drafts = PhotoDraftLoader.drafts(from: data)
                 guard !drafts.isEmpty else {
+                    self.isImporting = false
                     self.statusLabel.text = "Couldn't read those photos."
                     return
                 }
-                self.presentReview(for: drafts)
+
+                let droppedCount = results.count - drafts.count
+                self.presentReview(for: drafts, droppedCount: droppedCount)
             }
         }
+    }
+}
+
+/// Ensures a `CheckedContinuation` is resumed exactly once, no matter which
+/// of two racing callers — a completion handler and a timeout — gets there
+/// first. Both may run on arbitrary queues, so the flag is lock-protected
+/// rather than merely `@MainActor`.
+private final class SingleResume<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var resumed = false
+    private let continuation: CheckedContinuation<T, Never>
+
+    init(_ continuation: CheckedContinuation<T, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(with value: T) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !resumed else { return }
+        resumed = true
+        continuation.resume(returning: value)
     }
 }
