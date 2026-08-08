@@ -18,9 +18,11 @@ final class StickerStoreTests: XCTestCase {
     }
 
     private func entry(_ id: String, name: String, useCount: Int = 0,
-                       addedAt: Date = Date()) -> StickerEntry {
+                       addedAt: Date = Date(),
+                       favoritedAt: Date? = nil) -> StickerEntry {
         StickerEntry(id: id, name: name, source: .pasted,
-                     addedAt: addedAt, useCount: useCount)
+                     addedAt: addedAt, useCount: useCount,
+                     favoritedAt: favoritedAt)
     }
 
     func testAddThenReadBack() throws {
@@ -154,5 +156,92 @@ final class StickerStoreTests: XCTestCase {
         let thirdStore = try makeStore()
 
         XCTAssertEqual(thirdStore.all().map(\.id), ["111"])
+    }
+
+    func testSetFavoriteMarksAndSurvivesReload() throws {
+        let store = try makeStore()
+        try store.add(entry("111", name: "wave"),
+                      movingFileFrom: try temp.makePNG(named: "a.png"))
+
+        store.setFavorite(true, id: "111")
+        store.flush()
+
+        let reloaded = try makeStore()
+        XCTAssertEqual(reloaded.favorites().map(\.id), ["111"])
+        XCTAssertNotNil(reloaded.all().first?.favoritedAt)
+    }
+
+    func testUnfavoriteClearsAndSurvivesReload() throws {
+        let store = try makeStore()
+        try store.add(entry("111", name: "wave"),
+                      movingFileFrom: try temp.makePNG(named: "a.png"))
+        store.setFavorite(true, id: "111")
+        store.setFavorite(false, id: "111")
+        store.flush()
+
+        let reloaded = try makeStore()
+        XCTAssertTrue(reloaded.favorites().isEmpty)
+        XCTAssertNil(reloaded.all().first?.favoritedAt)
+        XCTAssertEqual(reloaded.all().count, 1, "unfavoriting must not delete")
+    }
+
+    func testFavoritesAreOrderedOldestFirst() throws {
+        let store = try makeStore()
+        // Explicit timestamps rather than two setFavorite calls: Date() twice
+        // in quick succession can produce equal values, which would make this
+        // assertion pass or fail by luck.
+        try store.add(entry("second", name: "b",
+                            favoritedAt: Date(timeIntervalSince1970: 2000)),
+                      movingFileFrom: try temp.makePNG(named: "b.png"))
+        try store.add(entry("first", name: "a",
+                            favoritedAt: Date(timeIntervalSince1970: 1000)),
+                      movingFileFrom: try temp.makePNG(named: "a.png"))
+
+        XCTAssertEqual(store.favorites().map(\.id), ["first", "second"])
+    }
+
+    func testRefavoritingDoesNotMoveTheStickerOrChangeItsTimestamp() throws {
+        let store = try makeStore()
+        let original = Date(timeIntervalSince1970: 1000)
+        try store.add(entry("first", name: "a", favoritedAt: original),
+                      movingFileFrom: try temp.makePNG(named: "a.png"))
+        try store.add(entry("second", name: "b",
+                            favoritedAt: Date(timeIntervalSince1970: 2000)),
+                      movingFileFrom: try temp.makePNG(named: "b.png"))
+
+        store.setFavorite(true, id: "first")
+
+        XCTAssertEqual(store.favorites().map(\.id), ["first", "second"])
+        XCTAssertEqual(store.favorites().first?.favoritedAt, original)
+    }
+
+    func testFavoritesIsEmptyWhenNothingIsFavorited() throws {
+        let store = try makeStore()
+        try store.add(entry("111", name: "wave"),
+                      movingFileFrom: try temp.makePNG(named: "a.png"))
+
+        XCTAssertTrue(store.favorites().isEmpty)
+    }
+
+    func testDeletingAFavoriteRemovesItEverywhere() throws {
+        let store = try makeStore()
+        try store.add(entry("111", name: "wave"),
+                      movingFileFrom: try temp.makePNG(named: "a.png"))
+        store.setFavorite(true, id: "111")
+        let path = store.fileURL(for: "111").path
+
+        try store.delete(id: "111")
+
+        XCTAssertTrue(store.favorites().isEmpty)
+        XCTAssertTrue(store.all().isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: path))
+    }
+
+    func testFavoritingAnUnknownIDIsIgnored() throws {
+        let store = try makeStore()
+        store.setFavorite(true, id: "does-not-exist")
+
+        XCTAssertTrue(store.favorites().isEmpty)
+        XCTAssertTrue(store.all().isEmpty)
     }
 }

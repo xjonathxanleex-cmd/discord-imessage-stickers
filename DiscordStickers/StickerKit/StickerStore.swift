@@ -74,6 +74,20 @@ public final class StickerStore: @unchecked Sendable {
         imagesDirectory.appendingPathComponent("\(id).png")
     }
 
+    /// Favorites in the order they were favorited, oldest first, and they
+    /// never move. That stability is the feature's justification: `recents()`
+    /// reorders continuously by use, so nothing there holds a position.
+    public func favorites() -> [StickerEntry] {
+        queue.sync {
+            entries
+                .filter { $0.favoritedAt != nil }
+                .sorted {
+                    ($0.favoritedAt ?? .distantPast)
+                        < ($1.favoritedAt ?? .distantPast)
+                }
+        }
+    }
+
     // MARK: - Writes
 
     /// Moves an already-validated temp file into the store and records it.
@@ -105,6 +119,26 @@ public final class StickerStore: @unchecked Sendable {
         queue.sync {
             guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
             entries[index].useCount += 1
+            scheduleWriteLocked()
+        }
+    }
+
+    /// Favoriting something already favorited is a no-op rather than a
+    /// re-stamp — overwriting the timestamp would send the sticker to the end
+    /// of the list, which is exactly the instability this feature exists to
+    /// avoid. Unknown ids are ignored.
+    public func setFavorite(_ favorite: Bool, id: String) {
+        queue.sync {
+            guard let index = entries.firstIndex(where: { $0.id == id })
+            else { return }
+
+            if favorite {
+                guard entries[index].favoritedAt == nil else { return }
+                entries[index].favoritedAt = Date()
+            } else {
+                guard entries[index].favoritedAt != nil else { return }
+                entries[index].favoritedAt = nil
+            }
             scheduleWriteLocked()
         }
     }
