@@ -48,9 +48,12 @@ public enum StickerImporter {
     }
 
     /// Normalizes a draft and reports what the stored file actually turned
-    /// out to be, rather than trusting `draft.isAnimated` — that flag comes
-    /// from the source URL's file extension, a guess about content, not a
-    /// fact about it. The animated path can fall through to a static result
+    /// out to be, rather than trusting `draft.isAnimated` — for link drafts
+    /// that flag comes from the source URL's file extension, a guess about
+    /// content, not a fact about it. (Photo drafts detect it from the bytes
+    /// instead, via `PhotoDraftLoader`, but the re-check below is cheap and
+    /// applies uniformly regardless of origin.) The animated path can fall
+    /// through to a static result
     /// two ways: fewer than two frames (a single-frame GIF is not
     /// animation), or `AnimatedStickerProcessor.normalize` failing outright.
     /// Either way, what gets stored is static, so `isAnimated` reported here

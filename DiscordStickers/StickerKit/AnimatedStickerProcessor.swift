@@ -161,9 +161,22 @@ public enum AnimatedStickerProcessor {
         ) as CFDictionary)
 
         for frame in plan {
+            // Decoded through the thumbnail path, sized to the canvas it is
+            // about to be rendered onto, rather than
+            // `CGImageSourceCreateImageAtIndex`'s plain full-resolution
+            // decode — a 4K animated source would otherwise cost 33 MB per
+            // frame. Decoding at the canvas size rather than the source's
+            // native size is what bounds per-frame memory; `render` still
+            // runs afterwards because the thumbnail preserves aspect ratio
+            // rather than squaring the frame to `canvas` x `canvas`.
+            let decodeOptions: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: canvas,
+            ]
             guard
-                let decoded = CGImageSourceCreateImageAtIndex(
-                    source, frame.index, nil
+                let decoded = CGImageSourceCreateThumbnailAtIndex(
+                    source, frame.index, decodeOptions as CFDictionary
                 ),
                 let rendered = render(decoded, canvas: canvas)
             else { return nil }

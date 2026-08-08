@@ -45,4 +45,16 @@ public enum StickerLimits {
     /// bitmap: flat artwork at 8000x6000 compresses under 10 MB and decodes
     /// to ~192 MB, past the window where the extension is killed.
     public static let maxSourcePixelDimension = 4096
+
+    /// Ceiling on bytes accepted from a single picked photo or fetched link.
+    public static let maxSourceBytes = 10_000_000
+
+    /// Photos loadable in one pick. Unlimited selection is not survivable:
+    /// raw picked bytes are resident before anything can be downsampled, and
+    /// 20 photos at 3 MB already crosses the extension's 40 MB floor.
+    public static let maxPhotoSelection = 30
+
+    /// Concurrent photo loads. Matches `downloadConcurrency`'s reasoning:
+    /// peak memory is per-in-flight-item, so the cap is the bound.
+    public static let photoLoadConcurrency = 4
 }
