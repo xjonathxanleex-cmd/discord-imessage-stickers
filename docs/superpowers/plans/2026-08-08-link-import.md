@@ -472,7 +472,9 @@ public enum LinkParser {
         let filename = url.deletingPathExtension().lastPathComponent
         let decoded = filename.removingPercentEncoding ?? filename
         let cleaned = decoded.trimmingCharacters(in: .whitespacesAndNewlines)
-        return cleaned.isEmpty ? fallbackName : cleaned
+        // Foundation returns "/" — not "" — as the last path component of a
+        // root URL, so an emptiness check alone lets a sticker be named "/".
+        return (cleaned.isEmpty || cleaned == "/") ? fallbackName : cleaned
     }
 }
 ```
@@ -550,6 +552,8 @@ final class DraftFetcherTests: XCTestCase {
         XCTAssertEqual(draft.origin, .link)
         XCTAssertFalse(draft.imageData.isEmpty)
     }
+
+**Note on the async assertions below:** `await` cannot appear inside `XCTAssertEqual`'s autoclosure argument — it does not compile. Every awaited call is hoisted to a `let` first, and any test you add here must do the same.
 
     func testReportsUnreachableOnA404() async {
         StubURLProtocol.handler = { _ in (404, Data()) }
@@ -664,7 +668,9 @@ Create `DiscordStickers/StickerKit/DraftFetcher.swift`:
 ```swift
 import UIKit
 
-public enum DraftFetchError: Equatable {
+/// `Error` conformance is required, not decorative: this is used as the
+/// `Failure` type of a `Result`, which constrains it to `Error`.
+public enum DraftFetchError: Error, Equatable {
     case unreachable
     case tooLarge
     case notAnImage
