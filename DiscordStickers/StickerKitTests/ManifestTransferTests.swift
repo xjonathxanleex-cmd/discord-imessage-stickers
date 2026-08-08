@@ -220,6 +220,46 @@ final class ManifestTransferTests: XCTestCase {
         XCTAssertTrue(outcome.missing.contains("sha256-abcdef0123456789"))
     }
 
+    func testRestorePreservesEveryFieldOfAFullyPopulatedEntry() async throws {
+        // favoritedAt, then isAnimated, then source, then addedAt — four
+        // fields have been lost on this path one at a time, each caught
+        // only after the fact by its own dedicated test. This test builds
+        // an entry with every field set to a distinctive non-default value
+        // and asserts each one survives restore individually, so a failure
+        // names exactly which field was lost. A new StickerEntry field must
+        // either be carried through StickerStore.restoreMetadata(from:) or
+        // be explicitly excluded here with a stated reason.
+        let original = StickerEntry(
+            id: "01G3WEGZN0000ET2J0MQP5YJ0G",
+            name: "GAMBA",
+            source: .sevenTV,
+            addedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            useCount: 42,
+            favoritedAt: Date(timeIntervalSince1970: 1_700_000_500),
+            isAnimated: true
+        )
+
+        let sourceStore = try StickerStore(root: try TempDirectory().url, writeDebounce: 0)
+        try sourceStore.add(original, movingFileFrom: try temp.makePNG(named: "seed.png"))
+        let entries = ManifestTransfer.parseImport(ManifestTransfer.export(from: sourceStore))
+
+        StubURLProtocol.handler = { _ in
+            (200, self.temp.makeAnimatedGIFData(frameCount: 6))
+        }
+
+        _ = await ManifestTransfer.restore(entries, store: store, downloader: makeDownloader())
+
+        let restored = try XCTUnwrap(store.all().first { $0.id == original.id })
+
+        XCTAssertEqual(restored.id, original.id, "id was lost")
+        XCTAssertEqual(restored.name, original.name, "name was lost")
+        XCTAssertEqual(restored.source, original.source, "source was lost")
+        XCTAssertEqual(restored.isAnimated, original.isAnimated, "isAnimated was lost")
+        XCTAssertEqual(restored.useCount, original.useCount, "useCount was lost")
+        XCTAssertEqual(restored.favoritedAt, original.favoritedAt, "favoritedAt was lost")
+        XCTAssertEqual(restored.addedAt, original.addedAt, "addedAt was lost")
+    }
+
     func testRestoreRequestsSevenTVEmotesFromSevenTV() async throws {
         let entries = [
             StickerEntry(id: "01G3WEGZN0000ET2J0MQP5YJ0G", name: "GAMBA",
