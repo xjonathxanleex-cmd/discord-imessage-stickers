@@ -96,10 +96,69 @@ final class TransferPayloadParserTests: XCTestCase {
         XCTAssertEqual(emoji.map(\.name), ["first", "other"])
     }
 
-    func testAnimationIsNotEncodedInThePayload() {
-        // The payload carries no animation flag; the downloader's 415 retry
-        // and 7TV's own metadata settle it. Every parsed emoji starts static.
-        XCTAssertFalse(TransferPayloadParser.parse(valid).contains { $0.isAnimated })
+    func testParsesAnimatedTags() {
+        let emoji = TransferPayloadParser.parse("""
+        DSTK1
+        7a 111 animatedSevenTV
+        da 222 animatedDiscord
+        7 333 staticSevenTV
+        d 444 staticDiscord
+        """)
+
+        let byID = Dictionary(uniqueKeysWithValues: emoji.map { ($0.id, $0) })
+        XCTAssertEqual(byID["111"]?.isAnimated, true)
+        XCTAssertEqual(byID["222"]?.isAnimated, true)
+        XCTAssertEqual(byID["333"]?.isAnimated, false)
+        XCTAssertEqual(byID["444"]?.isAnimated, false)
+    }
+
+    func testAnimatedTagsMapToTheRightSource() {
+        let emoji = TransferPayloadParser.parse("""
+        DSTK1
+        7a 111 animatedSevenTV
+        da 222 animatedDiscord
+        """)
+
+        let byID = Dictionary(uniqueKeysWithValues: emoji.map { ($0.id, $0) })
+        XCTAssertEqual(byID["111"]?.source, .sevenTV)
+        XCTAssertEqual(byID["222"]?.source, .pasted)
+    }
+
+    func testUnknownTagVariantsAreSkipped() {
+        // Only "d", "da", "7", "7a" are recognised. A malformed variant must
+        // be dropped without affecting neighbouring good lines.
+        let emoji = TransferPayloadParser.parse("""
+        DSTK1
+        db 111 bad
+        7x 222 bad
+        a 333 bad
+        aa 444 bad
+        d 555 good
+        """)
+
+        XCTAssertEqual(emoji.map(\.name), ["good"])
+    }
+
+    func testStopsAfterTheEmojiCap() {
+        // Machine-generated, unlike pasted Discord markup, so it is not
+        // bounded by what a human would ever paste by hand.
+        var lines = ["DSTK1"]
+        for index in 0..<(StickerLimits.maxPayloadEmoji + 50) {
+            lines.append("d \(index) emoji\(index)")
+        }
+
+        let emoji = TransferPayloadParser.parse(lines.joined(separator: "\n"))
+
+        XCTAssertEqual(emoji.count, StickerLimits.maxPayloadEmoji)
+    }
+
+    func testTruncatesOverlongNames() {
+        let longName = String(repeating: "x",
+                              count: StickerLimits.maxStickerNameLength + 20)
+
+        let emoji = TransferPayloadParser.parse("DSTK1\nd 111 \(longName)")
+
+        XCTAssertEqual(emoji.first?.name.count, StickerLimits.maxStickerNameLength)
     }
 
     func testLooksLikePayloadRecognisesTheHeader() {
