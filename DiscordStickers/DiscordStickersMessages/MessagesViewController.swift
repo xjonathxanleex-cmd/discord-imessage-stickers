@@ -77,6 +77,11 @@ final class MessagesViewController: MSMessagesAppViewController {
         searchRow.axis = .horizontal
         searchRow.alignment = .center
         searchRow.spacing = 8
+        // The search bar expands to fill, so without a trailing margin Edit is
+        // pinned hard against the screen edge — awkward to hit and visually
+        // cramped. Matches the 12pt inset the tab bar and the grid already use.
+        searchRow.isLayoutMarginsRelativeArrangement = true
+        searchRow.layoutMargins = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 12)
         searchRow.addArrangedSubview(searchBar)
         searchRow.addArrangedSubview(editButton)
 
