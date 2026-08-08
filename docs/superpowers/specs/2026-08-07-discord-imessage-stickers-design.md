@@ -39,6 +39,14 @@ These shape every decision below. Losing track of one invalidates the design.
    - `File → New → Project → iOS → App`
    - `File → New → Target → iMessage Extension`
 
+7. **Stickers created at runtime cannot appear in the system stickers drawer.** Tested on-device 2026-08-07: a sticker sent from this app does **not** subsequently appear in the stickers section of the emoji keyboard, nor anywhere else in Apple's unified sticker UI.
+
+   The obstacle is enumeration. Apple surfaces third-party stickers it can *index*, and the documented path for that is a Sticker Pack extension, which declares its contents as files in a code-signed bundle fixed at install time. This app's stickers do not exist until the user pastes them, so the system has no way to know what they are, and there is no public API to register them after the fact.
+
+   **This is a deliberate platform trade, not a defect:** Sticker Packs get first-class placement precisely because they are static, declared, and reviewable; this app gets to fetch arbitrary content at runtime and organize it freely, and pays for that with its own drawer. Given the product is "whatever emoji happen to be in your servers", runtime flexibility is the right side of the trade.
+
+   **Design consequence:** the extension's own drawer is the entire surface. Search, the Recents ordering, and the source tabs are not conveniences — they are the only navigation that will ever exist for these stickers, since the system will never provide a recents list or a search over them.
+
 ---
 
 ## 3. Architecture
