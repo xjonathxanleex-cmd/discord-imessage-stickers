@@ -695,7 +695,7 @@ git commit -m "feat: wire favorite and delete actions through the grid"
 - Modify: `DiscordStickers/DiscordStickersMessages/MessagesViewController.swift`
 
 **Interfaces:**
-- Consumes: `StickerFilter.favorites` (Task 3), `StickerGridViewController.isEditing` (Task 5), `StickerStore.favorites()` (Task 2).
+- Consumes: `StickerFilter.favorites` (Task 3), `StickerGridViewController.isEditingStickers` (Task 5), `StickerStore.favorites()` (Task 2).
 - Produces: the finished feature. Nothing consumes this.
 
 - [ ] **Step 1: Replace the tabs control and add the Edit button**

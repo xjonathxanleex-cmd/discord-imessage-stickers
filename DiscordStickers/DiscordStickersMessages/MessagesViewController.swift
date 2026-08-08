@@ -2,8 +2,9 @@ import UIKit
 import Messages
 import StickerKit
 
-/// Compact mode shows Recents plus the full grid. Expanded mode adds search
-/// and the paste control.
+/// Compact mode shows whichever of the three tabs (Favorites, Recent, All) is
+/// selected, defaulting to Favorites. Expanded mode adds search, the paste
+/// control, and the Edit button.
 ///
 /// The extension owns storage outright: App Groups is unavailable on a free
 /// Personal Team, so there is no shared container to read from.
@@ -139,7 +140,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         pasteContainer.isHidden = !expanded
         if !expanded {
             // Never leave the drawer in a state where taps do not send.
-            setEditing(false)
+            setStickerEditing(false)
             searchBar.text = nil
             searchBar.resignFirstResponder()
         }
@@ -184,7 +185,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         }
     }
 
-    private func setEditing(_ editing: Bool) {
+    private func setStickerEditing(_ editing: Bool) {
         grid?.isEditingStickers = editing
         editButton.setTitle(editing ? "Done" : "Edit", for: .normal)
     }
@@ -197,7 +198,7 @@ final class MessagesViewController: MSMessagesAppViewController {
 
     @objc private func editTapped() {
         guard grid != nil else { return }
-        setEditing(!grid.isEditingStickers)
+        setStickerEditing(!grid.isEditingStickers)
     }
 
     private func showFatal(_ message: String) {

@@ -88,7 +88,7 @@ This supersedes the base spec §4 tab list (`Recent` · `All`, with `Pasted` hid
 
 **Default tab** is `Favorites` when it is non-empty, and `All` otherwise. A first-run user sees exactly what they see today.
 
-**Empty state:** when Favorites is selected and empty, the grid shows a single line rather than a blank area. The wording must not assume the drawer is expanded, since Edit is unreachable from compact mode: *"Expand this drawer, tap Edit, then tap the star on any sticker."*
+**Empty state:** when Favorites is selected and empty, the grid shows a single line rather than a blank area. The wording must not assume the drawer is expanded, since Edit is unreachable from compact mode, and it must not instruct an action that is impossible from this screen: with Favorites empty, there is no sticker on this tab to star, so the missing step — switch to another tab first — has to be named. (An earlier version of this wording, *"Expand this drawer, tap Edit, then tap the star on any sticker,"* omitted that step and described an action impossible from the screen showing it.) Current wording: *"No favorites yet. Open the All tab, tap Edit, then tap the star on any sticker."*
 
 This is the only empty state in the app; `All` being empty on first run is already covered by the paste flow's own messaging.
 

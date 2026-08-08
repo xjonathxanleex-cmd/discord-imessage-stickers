@@ -23,6 +23,10 @@ public final class StickerCell: UICollectionViewCell {
     private let starButton = UIButton(type: .system)
     private let deleteButton = UIButton(type: .system)
 
+    // 32x32 frames need this to keep the glyph itself visually small; see
+    // the frame-size comment in `init`.
+    private static let glyphConfiguration = UIImage.SymbolConfiguration(pointSize: 17)
+
     private var onTap: (() -> Void)?
     private var onToggleFavorite: (() -> Void)?
     private var onDelete: (() -> Void)?
@@ -39,12 +43,18 @@ public final class StickerCell: UICollectionViewCell {
             contentView.addSubview(button)
         }
 
+        // Frames are 32x32 — short of the 44pt HIG minimum, which two of
+        // these would blow past in a ~68pt cell, but a meaningful step up
+        // from the 24pt they replace. The symbol configuration keeps the
+        // glyph itself visually small within the larger tappable frame.
         starButton.tintColor = .systemYellow
         starButton.addTarget(self, action: #selector(handleStar),
                              for: .touchUpInside)
 
         deleteButton.setImage(
-            UIImage(systemName: "xmark.circle.fill"), for: .normal
+            UIImage(systemName: "xmark.circle.fill",
+                   withConfiguration: Self.glyphConfiguration),
+            for: .normal
         )
         deleteButton.tintColor = .systemRed
         deleteButton.addTarget(self, action: #selector(handleDelete),
@@ -58,13 +68,13 @@ public final class StickerCell: UICollectionViewCell {
 
             starButton.topAnchor.constraint(equalTo: contentView.topAnchor),
             starButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            starButton.widthAnchor.constraint(equalToConstant: 24),
-            starButton.heightAnchor.constraint(equalToConstant: 24),
+            starButton.widthAnchor.constraint(equalToConstant: 32),
+            starButton.heightAnchor.constraint(equalToConstant: 32),
 
             deleteButton.topAnchor.constraint(equalTo: contentView.topAnchor),
             deleteButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            deleteButton.widthAnchor.constraint(equalToConstant: 24),
-            deleteButton.heightAnchor.constraint(equalToConstant: 24),
+            deleteButton.widthAnchor.constraint(equalToConstant: 32),
+            deleteButton.heightAnchor.constraint(equalToConstant: 32),
         ])
 
         // Recognizes alongside MSStickerView's own handling rather than
@@ -95,7 +105,8 @@ public final class StickerCell: UICollectionViewCell {
         starButton.isHidden = !isEditing
         deleteButton.isHidden = !isEditing
         starButton.setImage(
-            UIImage(systemName: isFavorite ? "star.fill" : "star"),
+            UIImage(systemName: isFavorite ? "star.fill" : "star",
+                   withConfiguration: Self.glyphConfiguration),
             for: .normal
         )
     }

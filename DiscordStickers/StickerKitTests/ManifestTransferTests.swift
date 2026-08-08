@@ -102,4 +102,48 @@ final class ManifestTransferTests: XCTestCase {
         XCTAssertTrue(store.all().isEmpty)
         XCTAssertTrue(StubURLProtocol.requestedURLs.isEmpty)
     }
+
+    func testRestoreReplaysFavorites() async throws {
+        let source = try StickerStore(root: try TempDirectory().url, writeDebounce: 0)
+        try source.add(
+            StickerEntry(id: "111", name: "wave", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 1000), useCount: 1),
+            movingFileFrom: try temp.makePNG(named: "a.png")
+        )
+        try source.add(
+            StickerEntry(id: "222", name: "smile", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 2000), useCount: 1),
+            movingFileFrom: try temp.makePNG(named: "b.png")
+        )
+        source.setFavorite(true, id: "111")
+
+        let text = ManifestTransfer.export(from: source)
+        let entries = ManifestTransfer.parseImport(text)
+
+        StubURLProtocol.handler = { _ in (200, self.pngData()) }
+        _ = await ManifestTransfer.restore(entries, store: store, downloader: makeDownloader())
+
+        let favoriteIDs = store.favorites().map(\.id)
+        XCTAssertEqual(favoriteIDs, ["111"])
+        XCTAssertFalse(favoriteIDs.contains("222"))
+    }
+
+    func testRestorePreservesFavoriteOrder() async throws {
+        let entries = [
+            StickerEntry(id: "111", name: "wave", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 1000), useCount: 0,
+                         favoritedAt: Date(timeIntervalSince1970: 5000)),
+            StickerEntry(id: "222", name: "smile", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 2000), useCount: 0,
+                         favoritedAt: Date(timeIntervalSince1970: 5001)),
+            StickerEntry(id: "333", name: "cry", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 3000), useCount: 0,
+                         favoritedAt: Date(timeIntervalSince1970: 5002)),
+        ]
+
+        StubURLProtocol.handler = { _ in (200, self.pngData()) }
+        _ = await ManifestTransfer.restore(entries, store: store, downloader: makeDownloader())
+
+        XCTAssertEqual(store.favorites().map(\.id), ["111", "222", "333"])
+    }
 }

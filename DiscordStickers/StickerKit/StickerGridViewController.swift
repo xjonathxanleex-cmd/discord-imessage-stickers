@@ -74,9 +74,12 @@ public final class StickerGridViewController: UIViewController {
 
         // Wording must not assume the drawer is expanded: Edit is unreachable
         // from compact mode, so "tap Edit" alone would refer to a button the
-        // reader cannot see.
-        emptyLabel.text = "Expand this drawer, tap Edit, "
-            + "then tap the star on any sticker."
+        // reader cannot see. It also must not describe an action that is
+        // impossible from this tab: the Favorites grid is empty precisely
+        // when this label is showing, so "star any sticker" needs an
+        // explicit "switch tabs first" step or there is nothing to star.
+        emptyLabel.text = "No favorites yet. Open the All tab, "
+            + "tap Edit, then tap the star on any sticker."
         emptyLabel.font = .preferredFont(forTextStyle: .footnote)
         emptyLabel.textColor = .secondaryLabel
         emptyLabel.textAlignment = .center

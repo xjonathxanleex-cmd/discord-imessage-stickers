@@ -203,7 +203,10 @@ public final class StickerStore: @unchecked Sendable {
 
     /// Reconstructs entries from whatever `.png` files are present, with no
     /// manifest to consult. Names are unrecoverable, so the file's ID stands
-    /// in as its name; search is degraded until the user re-pastes. Shared by
+    /// in as its name; search is degraded until the user re-pastes. Favorites
+    /// are unrecoverable too — this rebuild uses the initializer that
+    /// defaults `favoritedAt` to nil, so any favorite is silently lost along
+    /// with everything else this recovery path cannot restore. Shared by
     /// both the missing-manifest and corrupt-manifest recovery paths so they
     /// cannot drift apart.
     private static func rebuildFromImages(in imagesDirectory: URL) -> [StickerEntry] {
