@@ -23,6 +23,20 @@ public enum StickerLimits {
     /// Used when the `canvasSize` render still exceeds `maxBytes`.
     public static let fallbackCanvasSize = 128
 
+    /// Side length of the square canvas animated stickers are rendered onto.
+    ///
+    /// Smaller than `canvasSize` because animated stickers pay for canvas
+    /// area in **file bytes as well as memory**, once per frame. A measured
+    /// Discord emoji is 76x61 with 94 frames at 157 KB; scaling that to the
+    /// static 256 canvas multiplies pixel area ~14x across every frame,
+    /// which is megabytes against a 500 KB ceiling.
+    public static let animatedCanvasSize = 128
+
+    /// Frames beyond this are dropped evenly, with their delays redistributed
+    /// so total loop duration is unchanged. 48 keeps motion smooth to the eye
+    /// while roughly halving the measured 94-frame case.
+    public static let maxAnimatedFrames = 48
+
     public static let recentsLimit = 16
     public static let downloadConcurrency = 5
 }

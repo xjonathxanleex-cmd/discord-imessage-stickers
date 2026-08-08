@@ -152,4 +152,45 @@ final class ManifestTransferTests: XCTestCase {
 
         XCTAssertEqual(store.favorites().map(\.id), ["111", "222", "333"])
     }
+
+    func testRestoreRequestsTheRightExtensionFirstTime() async throws {
+        // EmojiDownloader already self-heals a wrong flag: a 415 triggers a
+        // retry with the opposite extension, so the flags would come back
+        // correct even with restore hardcoding isAnimated: false. What that
+        // hardcoding actually costs is a second CDN round-trip per
+        // misclassified entry — 415 then retry — instead of one correct
+        // request. On a large restore that is exactly the request pattern
+        // most likely to get an unofficial CDN consumer rate-limited, so
+        // this test pins request count and the exact extension requested,
+        // not just the flag on the stored entry.
+        let entries = [
+            StickerEntry(id: "111", name: "cuh", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 1000),
+                         useCount: 0, favoritedAt: nil, isAnimated: true),
+            StickerEntry(id: "222", name: "wave", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 2000),
+                         useCount: 0, favoritedAt: nil, isAnimated: false),
+        ]
+
+        StubURLProtocol.handler = { request in
+            switch request.url?.lastPathComponent {
+            case "111.gif": return (200, self.temp.makeAnimatedGIFData(frameCount: 6))
+            case "222.png": return (200, self.pngData(width: 128))
+            default:        return (415, Data())
+            }
+        }
+
+        _ = await ManifestTransfer.restore(entries, store: store,
+                                           downloader: makeDownloader())
+
+        let byID = Dictionary(uniqueKeysWithValues: store.all().map { ($0.id, $0) })
+        XCTAssertEqual(byID["111"]?.isAnimated, true)
+        XCTAssertEqual(byID["222"]?.isAnimated, false)
+        XCTAssertEqual(store.all().count, 2)
+
+        let requestedPaths = StubURLProtocol.requestedURLs.map(\.lastPathComponent)
+        XCTAssertEqual(requestedPaths.count, 2, "expected one request per sticker, no retries")
+        XCTAssertTrue(requestedPaths.contains("111.gif"))
+        XCTAssertFalse(requestedPaths.contains("111.png"))
+    }
 }

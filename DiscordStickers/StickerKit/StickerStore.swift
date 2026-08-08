@@ -70,6 +70,13 @@ public final class StickerStore: @unchecked Sendable {
         }
     }
 
+    // Hardcodes ".png": `MSSticker` resolves conformance (PNG/GIF/JPEG) from
+    // the path extension, so GIF bytes stored here would fail construction.
+    // APNG output legitimately keeps this extension, which is why animated
+    // output stays PNG-family for now. If animated output ever switches to
+    // GIF, this must change together with the temp file name in
+    // `EmojiDownloader.commit` and the `pathExtension == "png"` filter in
+    // `rebuildFromImages` below.
     public func fileURL(for id: String) -> URL {
         imagesDirectory.appendingPathComponent("\(id).png")
     }
@@ -214,6 +221,12 @@ public final class StickerStore: @unchecked Sendable {
             at: imagesDirectory, includingPropertiesForKeys: nil
         )) ?? []
 
+        // Hardcodes ".png": `MSSticker` resolves conformance (PNG/GIF/JPEG)
+        // from the path extension, so GIF bytes would be skipped here. APNG
+        // output legitimately keeps this extension, which is why animated
+        // output stays PNG-family for now. If animated output ever switches
+        // to GIF, this must change together with the temp file name in
+        // `EmojiDownloader.commit` and `fileURL(for:)` above.
         return files
             .filter { $0.pathExtension == "png" }
             .map { file in

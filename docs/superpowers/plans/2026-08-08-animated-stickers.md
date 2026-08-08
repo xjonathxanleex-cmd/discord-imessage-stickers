@@ -148,6 +148,12 @@ public struct StickerEntry: Codable, Equatable {
     /// the CDN returns **HTTP 415** for a static emoji requested as `.gif`.
     /// Without persisting this, every animated sticker would come back
     /// static — or fail outright — after a restore.
+    ///
+    /// Unlike `favoritedAt`, this is NOT a free migration. `favoritedAt` is
+    /// optional, and synthesized `Codable` uses `decodeIfPresent` for
+    /// optionals. A non-optional `Bool` is *required* by a synthesized
+    /// `init(from:)`, which would throw on every manifest written before this
+    /// property existed. Hence the hand-written `Codable` below.
     public var isAnimated: Bool
 
     public init(id: String, name: String, source: StickerSource,
@@ -161,8 +167,40 @@ public struct StickerEntry: Codable, Equatable {
         self.favoritedAt = favoritedAt
         self.isAnimated = isAnimated
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, source, addedAt, useCount, favoritedAt, isAnimated
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        source = try container.decode(StickerSource.self, forKey: .source)
+        addedAt = try container.decode(Date.self, forKey: .addedAt)
+        useCount = try container.decode(Int.self, forKey: .useCount)
+        favoritedAt = try container.decodeIfPresent(Date.self, forKey: .favoritedAt)
+        isAnimated = try container.decodeIfPresent(Bool.self, forKey: .isAnimated) ?? false
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(source, forKey: .source)
+        try container.encode(addedAt, forKey: .addedAt)
+        try container.encode(useCount, forKey: .useCount)
+        try container.encodeIfPresent(favoritedAt, forKey: .favoritedAt)
+        // Omitted when false, so a manifest with no animated stickers stays
+        // byte-shaped exactly as it was before this feature.
+        if isAnimated {
+            try container.encode(isAnimated, forKey: .isAnimated)
+        }
+    }
 }
 ```
+
+**The hand-written `Codable` is not optional here.** `favoritedAt` migrated for free because it is an *optional* — synthesized `Codable` calls `decodeIfPresent` for those. `isAnimated` is a non-optional `Bool`, so a synthesized `init(from:)` would treat its key as **required** and throw on every manifest written before this feature. `decodeIfPresent(...) ?? false` is what makes the migration work.
 
 - [ ] **Step 4: Add the constants**
 
@@ -1014,13 +1052,29 @@ Expect a summary reporting all three added.
 
 Look at the animated sticker in the grid.
 
-**It must be animating.** If it is a still image, `MSSticker` accepted the APNG and is rendering only its first frame — the exact failure the format fallback cannot detect, because construction succeeded.
+**It must be animating.** If it is a still image, go to Step 3a **before** concluding anything about the format. If it moves, skip to Step 5.
 
-If it is still: go to Step 4. If it moves: skip Step 4 and continue at Step 5.
+- [ ] **Step 3a: Only if it did not move — rule out playback first**
+
+`StickerCell.configure` sets `stickerView.sticker` and never calls `startAnimating()`, and `prepareForReuse` never calls `stopAnimating()`. The `MSStickerView` header documents `startAnimating` / `stopAnimating` / `isAnimating` but **does not state that assigning `.sticker` begins playback**, so a still sticker may simply mean nobody pressed play.
+
+Before touching the encoder, add to `DiscordStickers/StickerKit/StickerCell.swift`:
+
+- in `configure`, after `stickerView.sticker = sticker`: `stickerView.startAnimating()`
+- in `prepareForReuse`, before clearing the sticker: `stickerView.stopAnimating()`
+
+Rebuild and repeat Step 3. **Only if it is still frozen after this** does Step 4 apply — otherwise you would switch the format to fix a problem the format never caused, find GIF equally still, and wrongly conclude that `MSStickerView` cannot animate at all.
 
 - [ ] **Step 4: Only if APNG did not animate — switch to GIF**
 
-`AnimatedStickerProcessor.normalize` already takes an `asGIF` parameter, so this is a one-word change at the call site. In `DiscordStickers/StickerKit/EmojiDownloader.swift`, inside `process(_:raw:animated:)`, add `asGIF: true` to both `AnimatedStickerProcessor.normalize` calls in the attempt loop.
+This is **four** changes, not one. `AnimatedStickerProcessor.normalize` takes an `asGIF` parameter, but the stored file's extension must change with it.
+
+1. In `DiscordStickers/StickerKit/EmojiDownloader.swift`, inside `process(_:raw:animated:)`, add `asGIF: true` to the `AnimatedStickerProcessor.normalize` call in the attempt loop. (There is **one** call inside a three-element loop, not one per rung.)
+2. In the same file, `commit` writes its temp file as `…\(UUID()).png`. Animated files must end `.gif`.
+3. In `DiscordStickers/StickerKit/StickerStore.swift`, `fileURL(for:)` hardcodes `"\(id).png"`.
+4. In the same file, `rebuildFromImages` filters on `pathExtension == "png"` and would skip every GIF during corrupt-manifest recovery.
+
+`MSSticker` requires its file to conform to PNG, GIF or JPEG. If conformance is resolved from the path extension, GIF bytes in a `.png` file fail construction — so **every** animated sticker would become `unusable`, which reads as "GIF does not work either" when the real cause is the filename. All three sites carry comments naming the other two.
 
 Then delete the app from the phone (so old APNG files are gone), rebuild, re-import, and repeat Step 3.
 
@@ -1040,6 +1094,12 @@ Tap the animated sticker to send it into the conversation. It must animate in th
 Compare the sticker's animation against the same emoji in Discord. They should run at roughly the same speed.
 
 **If ours is noticeably slower, the frame-delay redistribution is wrong** — dropped frames' delays are being discarded rather than absorbed. That is a code bug, not a tuning issue; report it.
+
+- [ ] **Step 6a: Confirm 128px animated stickers are accepted at all**
+
+`MSSticker.h` states stickers "must be no smaller than 300px X 300px", which contradicts the 100px floor this project uses and has always worked at 256. Animated stickers are the first to ship at **128**, so this is new territory. The suite proves construction succeeds at 128 in the simulator; confirm an animated sticker actually appears on device rather than silently failing validation.
+
+If animated stickers are missing entirely while static ones import fine, raise `StickerLimits.animatedCanvasSize` to 256 and reduce `maxAnimatedFrames` to compensate for the file-size budget.
 
 - [ ] **Step 7: The memory check**
 
