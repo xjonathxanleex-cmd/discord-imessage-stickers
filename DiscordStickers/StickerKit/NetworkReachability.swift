@@ -21,12 +21,17 @@ enum NetworkReachability {
 
     private static var latestStatus: NWPath.Status?
 
+    /// Held in a static so the monitor outlives `started`. A local would be
+    /// eligible for deallocation once that closure returned, and a deallocated
+    /// monitor never delivers a path update — leaving `latestStatus` nil
+    /// forever and turning this whole type into a constant `true`.
+    private static let monitor = NWPathMonitor()
+
     /// Starts the monitor exactly once, no matter how many times or how
     /// concurrently `isLikelyOnline` is read. Swift guarantees `static let`
     /// initializers run at most once, lazily, and thread-safely, so this is
     /// used purely for its once-only side effect.
     private static let started: Void = {
-        let monitor = NWPathMonitor()
         monitor.pathUpdateHandler = { path in
             latestStatus = path.status
         }
