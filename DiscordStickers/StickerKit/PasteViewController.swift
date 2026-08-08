@@ -1,12 +1,13 @@
 import UIKit
 
-/// The paste control, plus the one-line summary of what a batch did.
+/// The paste button, plus the one-line summary of what a batch did.
 ///
-/// Deliberately knows nothing about its parent. `UIPasteControl` is used
-/// rather than reading `UIPasteboard.general.string` directly, because
-/// programmatic pasteboard reads trigger a system "Allow Paste?" alert on
-/// every invocation — intolerable for this app's core action. A tap on the
-/// control *is* the consent.
+/// Deliberately knows nothing about its parent. `UIPasteControl` was tried
+/// first, specifically to avoid the system "Allow Paste?" alert that a direct
+/// `UIPasteboard.general.string` read triggers. On a real device, inside a
+/// Messages extension, it renders permanently disabled — even with valid
+/// text on the clipboard — so a plain button is used instead. See
+/// `pasteTapped()` for the trade-off this accepts.
 public final class PasteViewController: UIViewController {
 
     private let store: StickerStore
@@ -33,13 +34,11 @@ public final class PasteViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .clear
 
-        pasteConfiguration = UIPasteConfiguration(forAccepting: NSString.self)
-
-        var configuration = UIPasteControl.Configuration()
-        configuration.displayMode = .labelOnly
-        configuration.cornerStyle = .capsule
-        let pasteControl = UIPasteControl(configuration: configuration)
-        pasteControl.target = self
+        var pasteConfiguration = UIButton.Configuration.borderedProminent()
+        pasteConfiguration.cornerStyle = .capsule
+        pasteConfiguration.title = "Paste Emoji"
+        let pasteButton = UIButton(configuration: pasteConfiguration)
+        pasteButton.addTarget(self, action: #selector(pasteTapped), for: .touchUpInside)
 
         statusLabel.text = "Copy Discord emoji, then paste them here."
         statusLabel.font = .preferredFont(forTextStyle: .footnote)
@@ -62,7 +61,7 @@ public final class PasteViewController: UIViewController {
         buttons.spacing = 16
 
         let stack = UIStackView(
-            arrangedSubviews: [pasteControl, spinner, statusLabel, buttons]
+            arrangedSubviews: [pasteButton, spinner, statusLabel, buttons]
         )
         stack.axis = .vertical
         stack.alignment = .center
@@ -81,14 +80,21 @@ public final class PasteViewController: UIViewController {
         ])
     }
 
-    public override func paste(itemProviders: [NSItemProvider]) {
-        for provider in itemProviders where provider.canLoadObject(ofClass: NSString.self) {
-            provider.loadObject(ofClass: NSString.self) { [weak self] object, _ in
-                guard let text = object as? String else { return }
-                Task { @MainActor in self?.handle(text) }
-            }
+    /// Reads the pasteboard directly, which deliberately triggers the system
+    /// "Allow Paste?" alert. `UIPasteControl` was tried first to avoid that
+    /// alert entirely, but real-device testing showed it renders permanently
+    /// disabled inside a Messages extension — it cannot determine the
+    /// pasteboard's contents in that sandbox, even when the clipboard
+    /// demonstrably holds valid Discord markup. A button that never enables
+    /// is a worse failure than one system prompt, and a batch paste is a
+    /// rare action (roughly weekly, or after the 7-day reinstall), so one
+    /// prompt per batch is an acceptable trade.
+    @objc private func pasteTapped() {
+        guard let text = UIPasteboard.general.string, !text.isEmpty else {
+            statusLabel.text = "Nothing on the clipboard to paste."
             return
         }
+        handle(text)
     }
 
     @MainActor
@@ -149,8 +155,8 @@ public final class PasteViewController: UIViewController {
     }
 
     /// Restore reads the pasteboard directly and so will trigger the system
-    /// paste alert. That is acceptable here: this runs roughly once a week at
-    /// most, unlike the main paste flow.
+    /// paste alert, same as `pasteTapped()`. That is acceptable here too:
+    /// this runs roughly once a week at most.
     @objc private func importTapped() {
         guard let text = UIPasteboard.general.string else {
             statusLabel.text = "Nothing on the clipboard to restore."
