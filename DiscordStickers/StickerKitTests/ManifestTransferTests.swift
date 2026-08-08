@@ -129,16 +129,22 @@ final class ManifestTransferTests: XCTestCase {
     }
 
     func testRestorePreservesFavoriteOrder() async throws {
+        // Array order deliberately disagrees with favoritedAt order (333,
+        // 111, 222 vs. timestamps 111 < 222 < 333), so a replay that
+        // forgets to sort by favoritedAt before calling setFavorite would
+        // stamp fresh Date()s in array order and produce ["333", "111",
+        // "222"] here — a different, and wrong, result. That's what makes
+        // this test discriminate rather than pass on either implementation.
         let entries = [
+            StickerEntry(id: "333", name: "cry", source: .pasted,
+                         addedAt: Date(timeIntervalSince1970: 3000), useCount: 0,
+                         favoritedAt: Date(timeIntervalSince1970: 5002)),
             StickerEntry(id: "111", name: "wave", source: .pasted,
                          addedAt: Date(timeIntervalSince1970: 1000), useCount: 0,
                          favoritedAt: Date(timeIntervalSince1970: 5000)),
             StickerEntry(id: "222", name: "smile", source: .pasted,
                          addedAt: Date(timeIntervalSince1970: 2000), useCount: 0,
                          favoritedAt: Date(timeIntervalSince1970: 5001)),
-            StickerEntry(id: "333", name: "cry", source: .pasted,
-                         addedAt: Date(timeIntervalSince1970: 3000), useCount: 0,
-                         favoritedAt: Date(timeIntervalSince1970: 5002)),
         ]
 
         StubURLProtocol.handler = { _ in (200, self.pngData()) }
