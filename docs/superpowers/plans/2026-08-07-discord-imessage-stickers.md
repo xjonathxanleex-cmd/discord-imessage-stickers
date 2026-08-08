@@ -1405,7 +1405,16 @@ public final class EmojiDownloader: Sendable {
         case unusable(String)
     }
 
+    /// Duplicate ids in the input are collapsed to the first occurrence.
     public func download(_ emoji: [ParsedEmoji]) async -> DownloadOutcome {
+        // Dedupe up front. Two entries with the same id would both clear the
+        // `store.contains` check below, both get fetched, and both be counted
+        // in `added` — while `StickerStore.add` silently no-ops the second.
+        // It would also trap the `Dictionary(uniqueKeysWithValues:)` further
+        // down, crashing the extension from a public entry point.
+        var seenIDs: Set<String> = []
+        let emoji = emoji.filter { seenIDs.insert($0.id).inserted }
+
         // The diff. Doing it up front is what makes re-pasting an
         // overlapping batch free rather than redundant network work.
         var results: [ItemResult] = []
@@ -1550,7 +1559,7 @@ xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme Stick
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
-Expected: PASS, 39 tests total.
+Expected: PASS, 41 tests total.
 
 - [ ] **Step 7: Commit**
 
@@ -2069,7 +2078,7 @@ xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme Stick
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
-Expected: PASS, 43 tests total.
+Expected: PASS, 45 tests total.
 
 - [ ] **Step 6: Commit**
 
@@ -2621,7 +2630,7 @@ xcodebuild test -project DiscordStickers/DiscordStickers.xcodeproj -scheme Stick
   -destination 'platform=iOS Simulator,name=NAME' 2>&1 | tail -30
 ```
 
-Expected: PASS, 46 tests total.
+Expected: PASS, 48 tests total.
 
 - [ ] **Step 5: Add export and import buttons to the paste screen**
 
