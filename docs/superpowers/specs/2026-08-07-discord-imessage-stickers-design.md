@@ -9,11 +9,11 @@
 
 Use Discord custom emoji as iMessage stickers, without manually downloading each emoji and converting it in Photos.
 
-Static images only. Animated Discord emoji are supported as sources, but are stored and sent as their static first frame.
+~~Static images only. Animated Discord emoji are supported as sources, but are stored and sent as their static first frame.~~ **Superseded 2026-08-08** by `2026-08-08-animated-stickers-design.md`: animated Discord emoji are now stored and sent as animated stickers. `MSSticker` supports animated GIF and APNG; the original static-only choice was made for simplicity, not because of a platform limit.
 
 ### Non-goals
 
-- Animated stickers.
+- ~~Animated stickers.~~ **Superseded** — see `2026-08-08-animated-stickers-design.md`.
 - Any Discord account integration in v1 (no OAuth, no user token, no scraping the client).
 - Manually curated packs or folders. Organization is automatic.
 - On-device image upscaling or ML super-resolution. See §7.
