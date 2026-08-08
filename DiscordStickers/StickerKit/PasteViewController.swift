@@ -55,7 +55,7 @@ public final class PasteViewController: UIViewController {
         let pasteButton = UIButton(configuration: pasteConfiguration)
         pasteButton.addTarget(self, action: #selector(pasteTapped), for: .touchUpInside)
 
-        statusLabel.text = "Copy Discord emoji, then paste them here."
+        statusLabel.text = "Copy Discord or 7TV emoji, then paste them here."
         statusLabel.font = .preferredFont(forTextStyle: .footnote)
         statusLabel.textColor = .secondaryLabel
         statusLabel.textAlignment = .center
