@@ -26,14 +26,16 @@ public final class StickerGridViewController: UIViewController {
     /// interaction is off — sending and dragging are disabled for the
     /// duration rather than competing with the edit controls for gestures.
     ///
-    /// This shadows `UIViewController.isEditing` (bridged from the
-    /// Objective-C `editing`/`isEditing` pair), which is why it's an
-    /// `override` rather than a fresh stored property — a plain
-    /// `public var isEditing: Bool = false` does not compile here, since
-    /// UIKit already declares a settable `isEditing` on the superclass.
-    /// It defaults to `false`, matching `UIViewController`'s own default.
-    public override var isEditing: Bool {
-        didSet { if isEditing != oldValue { collectionView?.reloadData() } }
+    /// Named `isEditingStickers`, not `isEditing`: `UIViewController` already
+    /// declares a settable `isEditing` tied to its `editButtonItem` and
+    /// `setEditing(_:animated:)` machinery, none of which this app uses. A
+    /// plain `var isEditing` therefore fails to compile, and overriding it
+    /// would let UIKit flip this app's edit mode through a path nobody here
+    /// is watching.
+    public var isEditingStickers: Bool = false {
+        didSet {
+            if isEditingStickers != oldValue { collectionView?.reloadData() }
+        }
     }
 
     public init(store: StickerStore) {
@@ -133,7 +135,7 @@ extension StickerGridViewController: UICollectionViewDataSource {
             cell.configure(
                 with: sticker,
                 isFavorite: entry.favoritedAt != nil,
-                isEditing: isEditing,
+                isEditing: isEditingStickers,
                 onTap: { [weak self] in
                     self?.store.recordUse(id: entry.id)
                 },
