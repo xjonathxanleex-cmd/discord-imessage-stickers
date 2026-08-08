@@ -28,7 +28,17 @@ public final class EmojiDownloader: Sendable {
         case unusable(String)
     }
 
+    /// Duplicate ids in the input are collapsed to the first occurrence,
+    /// matching `EmojiMarkupParser`'s own dedupe policy.
     public func download(_ emoji: [ParsedEmoji]) async -> DownloadOutcome {
+        // Dedupe up front: a second entry with the same id would otherwise
+        // pass `store.contains` alongside the first, get fetched twice, and
+        // be double-counted in the outcome even though `StickerStore.add`
+        // silently no-ops the second write. Keeping the first occurrence
+        // also keeps the `order` map below well-defined.
+        var seenIDs: Set<String> = []
+        let emoji = emoji.filter { seenIDs.insert($0.id).inserted }
+
         // The diff. Doing it up front is what makes re-pasting an
         // overlapping batch free rather than redundant network work.
         var results: [ItemResult] = []

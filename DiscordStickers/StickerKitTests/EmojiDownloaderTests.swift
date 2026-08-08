@@ -152,4 +152,28 @@ final class EmojiDownloaderTests: XCTestCase {
         XCTAssertEqual(outcome, DownloadOutcome(added: [], alreadyPresent: [],
                                                 missing: [], unusable: []))
     }
+
+    func testCollapsesDuplicateIDsInTheInput() async throws {
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
+
+        let outcome = await makeDownloader().download([
+            emoji("111", "wave"), emoji("111", "wave"),
+        ])
+
+        XCTAssertEqual(outcome.added, ["111"])
+        XCTAssertEqual(store.all().count, 1)
+        XCTAssertEqual(StubURLProtocol.requestedURLs.count, 1)
+    }
+
+    func testDuplicateIDsDoNotDoubleCountAcrossBuckets() async throws {
+        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
+
+        let outcome = await makeDownloader().download([
+            emoji("111", "wave"), emoji("111", "wave"), emoji("222", "smile"),
+        ])
+
+        let total = outcome.added.count + outcome.alreadyPresent.count
+            + outcome.missing.count + outcome.unusable.count
+        XCTAssertEqual(total, 2)
+    }
 }
