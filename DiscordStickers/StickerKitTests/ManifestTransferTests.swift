@@ -188,10 +188,22 @@ final class ManifestTransferTests: XCTestCase {
         XCTAssertEqual(byID["222"]?.isAnimated, false)
         XCTAssertEqual(store.all().count, 2)
 
+        // What this really guards is that `isAnimated` survives a backup and
+        // is *used*: the animated sticker must be fetched as `.gif` and must
+        // never be fetched as `.png`, because a `.png` response for an
+        // animated emoji is a silently flattened image.
+        //
+        // It previously also asserted "one request per sticker, no retries".
+        // That efficiency no longer holds and should not: the animated format
+        // is now tried first for everything, so a genuinely static sticker
+        // costs a 415 and one retry. A duplicate round trip on a restore is
+        // worth far less than a permanently frozen sticker.
         let requestedPaths = StubURLProtocol.requestedURLs.map(\.lastPathComponent)
-        XCTAssertEqual(requestedPaths.count, 2, "expected one request per sticker, no retries")
         XCTAssertTrue(requestedPaths.contains("111.gif"))
-        XCTAssertFalse(requestedPaths.contains("111.png"))
+        XCTAssertFalse(requestedPaths.contains("111.png"),
+                       "an animated sticker must never be fetched as .png")
+        XCTAssertEqual(requestedPaths.filter { $0.hasPrefix("111") }.count, 1,
+                       "a correct animated flag still saves the retry")
     }
 
     func testRestoreDoesNotRequestContentHashedStickersFromDiscord() async throws {
@@ -214,9 +226,13 @@ final class ManifestTransferTests: XCTestCase {
             entries, store: store, downloader: makeDownloader()
         )
 
-        XCTAssertEqual(StubURLProtocol.requestedURLs.count, 1,
-                       "expected exactly one request, for the Discord entry only")
-        XCTAssertEqual(StubURLProtocol.requestedURLs.first?.lastPathComponent, "111.png")
+        // The point is *which* ids are requested, not how many times. The
+        // content-hashed entry must produce no request at all; the Discord one
+        // is tried as `.gif` first, as everything now is.
+        let requested = StubURLProtocol.requestedURLs.map(\.lastPathComponent)
+        XCTAssertTrue(requested.allSatisfy { $0.hasPrefix("111.") },
+                      "a sha256- id has no remote origin and must not be fetched")
+        XCTAssertEqual(requested.first, "111.gif")
         XCTAssertTrue(outcome.missing.contains("sha256-abcdef0123456789"))
     }
 

@@ -101,31 +101,52 @@ public final class EmojiDownloader: Sendable {
         case failed
     }
 
+    /// Always asks for the animated format first, whatever `isAnimated` says.
+    ///
+    /// Both CDNs answer a wrong guess, but only in one direction:
+    ///
+    /// | Request | Discord | 7TV |
+    /// |---|---|---|
+    /// | static emoji as animated | **415** | **404** |
+    /// | animated emoji as static | **200, flattened** | **200, flattened** |
+    ///
+    /// Asking for the static format first is therefore the one mistake that
+    /// cannot be detected or undone: the response is a perfectly valid image,
+    /// just the wrong one, and it gets stored and recorded as static so no
+    /// later retry can ever recover it. Asking for the animated format first
+    /// makes every wrong guess a *status code*, which is recoverable.
+    ///
+    /// The cost is one extra request per static emoji. That is the right trade
+    /// for a batch import that runs about weekly: a duplicate HTTP round trip
+    /// is invisible, a permanently frozen sticker is not.
+    ///
+    /// This replaced a flag-first order whose comment claimed the 415
+    /// self-heals a wrong guess "there". It self-healed exactly one of the two
+    /// wrong guesses, and not the one that actually happens — a bare id from
+    /// the desktop page's raw-id box defaults to static, and every animated
+    /// emoji imported that way arrived flattened.
     private func fetchOne(_ emoji: ParsedEmoji) async -> ItemResult {
-        switch await fetch(emoji, animated: emoji.isAnimated) {
-        case .notFound:
-            return .missing(emoji.id)
-        case .failed:
-            return .unusable(emoji.id)
+        switch await fetch(emoji, animated: true) {
         case .success(let raw):
-            return process(emoji, raw: raw, animated: emoji.isAnimated)
-        case .unsupportedType:
-            // The flag disagreed with reality. This self-heal is Discord-
-            // specific: Discord's CDN returns 415 for a static emoji
-            // requested as .gif, so retrying with the other extension and
-            // storing whichever answer actually worked corrects a wrong
-            // guess there. 7TV does not behave this way — see
-            // `TransferPayloadParser`'s doc comment — so this branch is
-            // simply never reached for a `.sevenTV` emoji; the tag itself
-            // must already be right.
-            switch await fetch(emoji, animated: !emoji.isAnimated) {
+            // Trusts the bytes, not the request: `process` re-checks the frame
+            // count, so a CDN that answers 200 with a still image still lands
+            // on the static path.
+            return process(emoji, raw: raw, animated: true)
+
+        case .notFound, .unsupportedType:
+            // 404 from 7TV or 415 from Discord both mean "no animated form of
+            // this exists" — so it is static, not missing.
+            switch await fetch(emoji, animated: false) {
             case .success(let raw):
-                return process(emoji, raw: raw, animated: !emoji.isAnimated)
+                return process(emoji, raw: raw, animated: false)
             case .notFound:
                 return .missing(emoji.id)
             case .failed, .unsupportedType:
                 return .unusable(emoji.id)
             }
+
+        case .failed:
+            return .unusable(emoji.id)
         }
     }
 

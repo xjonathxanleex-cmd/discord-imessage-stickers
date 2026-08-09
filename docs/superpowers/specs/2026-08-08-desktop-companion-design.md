@@ -105,10 +105,27 @@ A single static HTML file with no build step, no framework, and no dependencies 
    appear somewhere you can copy *from*; this one accepts an id found anywhere at all.
 
    Animation is inferred per line: a `.gif` extension means animated, `.png`/`.webp` means
-   static, and a **bare id defaults to static** — which Discord's CDN self-heals, since a
-   wrongly-static Discord request returns 415 and the phone's downloader retries. That
-   fallback does **not** hold for 7TV (§3), so a 7TV URL without a recognizable extension is
+   static, and a **bare id defaults to static**. A 7TV URL without a recognizable extension is
    rejected with a message rather than guessed at.
+
+   > **Correction, 2026-08-09.** This section originally justified the bare-id default by
+   > claiming "Discord's CDN self-heals, since a wrongly-static Discord request returns 415".
+   > That is backwards, and it caused real stickers to import permanently frozen.
+   >
+   > | Request | Discord | 7TV |
+   > |---|---|---|
+   > | static emoji as **animated** | 415 | 404 |
+   > | **animated emoji as static** | **200, flattened** | **200, flattened** |
+   >
+   > The 415 only ever answers the *other* wrong guess. A wrongly-static request returns a
+   > perfectly valid still image, which is then stored and recorded as static, so nothing
+   > downstream can detect it and no retry can recover it.
+   >
+   > Fixed on the phone rather than here, in `EmojiDownloader.fetchOne`: the animated format
+   > is now requested **first for every emoji**, whatever the tag says, so a wrong guess is
+   > always a status code rather than a silently wrong image. The bare-id default is therefore
+   > harmless, and the tag is an optimisation — it saves a round trip when right, and costs
+   > one when wrong.
 
 **Picker:** everything found renders as a grid of thumbnails with checkboxes, all selected by default, with *Select all* / *Select none*. Names are shown and editable inline — a user who wants `catJAM` called `cat` should not have to wait until the phone to say so.
 

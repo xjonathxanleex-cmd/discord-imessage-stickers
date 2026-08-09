@@ -193,13 +193,45 @@ final class EmojiDownloaderTests: XCTestCase {
         XCTAssertNil(StubURLProtocol.requestedURLs.first?.query)
     }
 
-    func testRequestsPNGForStaticEmoji() async throws {
-        StubURLProtocol.handler = { _ in (200, self.pngData(width: 128)) }
+    /// The animated format is requested first whatever the flag says, so a
+    /// static emoji costs a 415 and one retry. Previously this asserted that a
+    /// static emoji went straight to `.png`; that saved a round trip and cost
+    /// correctness — see the ordering note on `fetchOne`.
+    func testFallsBackToPNGWhenNoAnimatedFormExists() async throws {
+        StubURLProtocol.handler = { request in
+            request.url?.pathExtension == "gif"
+                ? (415, Data())
+                : (200, self.pngData(width: 128))
+        }
 
         _ = await makeDownloader().download([emoji("111", "wave")])
 
-        XCTAssertEqual(StubURLProtocol.requestedURLs.first?.lastPathComponent,
-                       "111.png")
+        XCTAssertEqual(StubURLProtocol.requestedURLs.map(\.lastPathComponent),
+                       ["111.gif", "111.png"])
+        XCTAssertEqual(store.all().first?.isAnimated, false)
+    }
+
+    /// The bug the ordering exists to prevent, and the one Jonathan hit: some
+    /// animated emoji imported permanently frozen.
+    ///
+    /// A wrong "static" guess is undetectable at the byte level, because
+    /// Discord answers a `.png` request for an animated emoji with **200 and a
+    /// genuinely flattened image**. Nothing downstream can tell that from a
+    /// real static emoji, so it is stored as static and no retry can recover
+    /// it. Asking for `.gif` first turns the wrong guess into a status code.
+    func testAnAnimatedEmojiWronglyFlaggedStaticStillImportsAnimated() async throws {
+        StubURLProtocol.handler = { request in
+            request.url?.pathExtension == "gif"
+                ? (200, self.temp.makeAnimatedGIFData(frameCount: 6))
+                : (200, self.pngData(width: 128))   // what Discord flattens it to
+        }
+
+        // Flag says static. A bare id from the desktop page arrives exactly
+        // like this.
+        _ = await makeDownloader().download([emoji("111", "wave")])
+
+        XCTAssertEqual(store.all().first?.isAnimated, true,
+                       "the emoji is animated; only the flag said otherwise")
     }
 
     func testStoresAnimatedFlagOnTheEntry() async throws {
@@ -278,10 +310,14 @@ final class EmojiDownloaderTests: XCTestCase {
             sevenTVEmoji("01G3WEGZN0000ET2J0MQP5YJ0G", "GAMBA", animated: false)
         ])
 
+        // The host is what this guards. The animated variant is tried first
+        // for 7TV too: a static emote answers `4x.gif` with 404, which is
+        // recoverable, whereas an animated one answers `4x.webp` with 200 and
+        // a still frame, which is not.
         let url = try XCTUnwrap(StubURLProtocol.requestedURLs.first)
         XCTAssertEqual(url.host, "cdn.7tv.app")
         XCTAssertEqual(url.path,
-                       "/emote/01G3WEGZN0000ET2J0MQP5YJ0G/4x.webp")
+                       "/emote/01G3WEGZN0000ET2J0MQP5YJ0G/4x.gif")
     }
 
     func testRequestsGIFForAnimatedSevenTVEmotes() async throws {
@@ -336,6 +372,8 @@ final class EmojiDownloaderTests: XCTestCase {
 
         let url = try XCTUnwrap(StubURLProtocol.requestedURLs.first)
         XCTAssertEqual(url.host, "cdn.discordapp.com")
-        XCTAssertEqual(url.path, "/emojis/111.png")
+        // Host is the point of this regression guard; the extension is now
+        // always `.gif` on the first attempt.
+        XCTAssertEqual(url.path, "/emojis/111.gif")
     }
 }
