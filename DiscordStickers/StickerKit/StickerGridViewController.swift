@@ -167,6 +167,26 @@ extension StickerGridViewController: UICollectionViewDataSource {
 
 extension StickerGridViewController: UICollectionViewDelegateFlowLayout {
 
+    /// Animation starts here rather than in `cellForItemAt`.
+    ///
+    /// `MSStickerView.startAnimating()` does nothing when the view is not yet
+    /// in a window, and never retries — so starting playback during
+    /// configuration left every animated sticker frozen in the grid while the
+    /// same file animated correctly once sent into a conversation. That split
+    /// is what makes it look like a file problem rather than a timing one.
+    public func collectionView(_ collectionView: UICollectionView,
+                               willDisplay cell: UICollectionViewCell,
+                               forItemAt indexPath: IndexPath) {
+        (cell as? StickerCell)?.beginAnimating()
+    }
+
+    /// Off-screen cells stop decoding frames nobody can see.
+    public func collectionView(_ collectionView: UICollectionView,
+                               didEndDisplaying cell: UICollectionViewCell,
+                               forItemAt indexPath: IndexPath) {
+        (cell as? StickerCell)?.endAnimating()
+    }
+
     public func collectionView(
         _ collectionView: UICollectionView,
         layout: UICollectionViewLayout,

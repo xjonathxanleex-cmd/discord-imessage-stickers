@@ -99,13 +99,17 @@ public final class StickerCell: UICollectionViewCell {
                           onToggleFavorite: @escaping () -> Void,
                           onDelete: @escaping () -> Void) {
         stickerView.sticker = sticker
-        // Assigning `.sticker` does NOT begin playback. Device testing found
-        // animated stickers frozen in the grid while animating correctly once
-        // sent into a conversation — the format was always fine, nobody had
-        // pressed play. `MSStickerView.h` documents startAnimating/
-        // stopAnimating but never states that assignment starts anything, and
-        // the simulator cannot reveal the difference.
-        stickerView.startAnimating()
+        // Playback is NOT started here. Assigning `.sticker` does not begin it
+        // — `MSStickerView.h` documents startAnimating/stopAnimating but never
+        // says assignment starts anything — but calling it here does not work
+        // either.
+        //
+        // `configure` runs from `cellForItemAt`, which happens *before* the
+        // cell is in the window. A sticker told to animate off-screen does not
+        // begin, and nothing asks it again, so it stays frozen for as long as
+        // that cell lives. Starting playback belongs in `willDisplay`, which
+        // fires once the cell is actually about to appear — see
+        // `beginAnimating()`.
         self.onTap = onTap
         self.onToggleFavorite = onToggleFavorite
         self.onDelete = onDelete
@@ -118,6 +122,20 @@ public final class StickerCell: UICollectionViewCell {
                    withConfiguration: Self.glyphConfiguration),
             for: .normal
         )
+    }
+
+    /// Starts playback. Called from `willDisplay`, when the cell is genuinely
+    /// on its way on screen — not from `configure`, which runs while the cell
+    /// is still detached and where the call is simply ignored.
+    public func beginAnimating() {
+        stickerView.startAnimating()
+    }
+
+    /// Stops playback when the cell scrolls away. Paired with `beginAnimating`
+    /// so off-screen cells are not decoding frames nobody can see, against a
+    /// 40-120 MB ceiling.
+    public func endAnimating() {
+        stickerView.stopAnimating()
     }
 
     public override func prepareForReuse() {
