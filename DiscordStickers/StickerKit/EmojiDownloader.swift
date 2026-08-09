@@ -157,9 +157,30 @@ public final class EmojiDownloader: Sendable {
     private static func url(for emoji: ParsedEmoji, animated: Bool) -> URL? {
         switch emoji.source {
         case .pasted, .server:
-            let ext = animated ? "gif" : "png"
+            // `.webp?animated=true`, not `.gif`. Discord has moved animated
+            // emoji off GIF: measured 2026-08-09, three animated emoji
+            // (`<a:` in their own markup) all returned **415 Invalid
+            // resource** for `.gif`, a flat still for `.png`, and a genuine
+            // animated WebP — 9, 6 and 8 ANMF frames — only for
+            // `.webp?animated=true`.
+            //
+            // The same URL is safe for static emoji: they answer 200 with a
+            // single-frame WebP, so this is one request that is always right
+            // and the frame count in the bytes decides the rest. That is
+            // better than the `.gif`-first order it replaces, which cost a
+            // 415 and a retry for every static emoji and *still* froze every
+            // newer animated one.
+            //
+            // ImageIO decodes animated WebP fully — frame count and a
+            // `kCGImagePropertyWebPDictionary` carrying per-frame delays,
+            // verified on the real files. The 7TV notes had listed that as
+            // unverified; it is now the thing this path depends on.
+            if animated {
+                return URL(string:
+                    "https://cdn.discordapp.com/emojis/\(emoji.id).webp?animated=true")
+            }
             return URL(string:
-                "https://cdn.discordapp.com/emojis/\(emoji.id).\(ext)")
+                "https://cdn.discordapp.com/emojis/\(emoji.id).png")
         case .sevenTV:
             let file = animated ? "4x.gif" : "4x.webp"
             return URL(string:

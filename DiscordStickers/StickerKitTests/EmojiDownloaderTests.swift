@@ -69,8 +69,12 @@ final class EmojiDownloaderTests: XCTestCase {
         _ = await makeDownloader().download([emoji("111", "wave")])
 
         // Task 0 measured that ?size= only downscales, so sending one either
-        // changes nothing or actively degrades the source.
-        XCTAssertNil(StubURLProtocol.requestedURLs.first?.query)
+        // changes nothing or actively degrades the source. `animated=true` is
+        // a different thing entirely — it selects the animated *variant*, not
+        // a resolution — so this asserts the absence of `size`, not the
+        // absence of a query.
+        let query = StubURLProtocol.requestedURLs.first?.query ?? ""
+        XCTAssertFalse(query.contains("size"), "got query: \(query)")
         XCTAssertEqual(StubURLProtocol.requestedURLs.count, 1)
     }
 
@@ -181,16 +185,21 @@ final class EmojiDownloaderTests: XCTestCase {
         ParsedEmoji(id: id, name: name, isAnimated: true)
     }
 
-    func testRequestsGIFForAnimatedEmoji() async throws {
+    /// Discord serves animated emoji as animated WebP behind
+    /// `?animated=true`, not as GIF. Measured 2026-08-09: three emoji whose
+    /// own markup says `<a:` all answered `.gif` with 415 Invalid resource,
+    /// `.png` with a flat still, and only `.webp?animated=true` with genuine
+    /// animation. See AnimatedWebPTests for the captured evidence.
+    func testRequestsAnimatedWebPForAnimatedEmoji() async throws {
         StubURLProtocol.handler = { _ in
             (200, self.temp.makeAnimatedGIFData(frameCount: 6))
         }
 
         _ = await makeDownloader().download([animatedEmoji("111", "cuh")])
 
-        XCTAssertEqual(StubURLProtocol.requestedURLs.first?.lastPathComponent,
-                       "111.gif")
-        XCTAssertNil(StubURLProtocol.requestedURLs.first?.query)
+        let url = try XCTUnwrap(StubURLProtocol.requestedURLs.first)
+        XCTAssertEqual(url.lastPathComponent, "111.webp")
+        XCTAssertEqual(url.query, "animated=true")
     }
 
     /// The animated format is requested first whatever the flag says, so a
@@ -199,7 +208,7 @@ final class EmojiDownloaderTests: XCTestCase {
     /// correctness — see the ordering note on `fetchOne`.
     func testFallsBackToPNGWhenNoAnimatedFormExists() async throws {
         StubURLProtocol.handler = { request in
-            request.url?.pathExtension == "gif"
+            request.url?.pathExtension == "webp"
                 ? (415, Data())
                 : (200, self.pngData(width: 128))
         }
@@ -207,7 +216,7 @@ final class EmojiDownloaderTests: XCTestCase {
         _ = await makeDownloader().download([emoji("111", "wave")])
 
         XCTAssertEqual(StubURLProtocol.requestedURLs.map(\.lastPathComponent),
-                       ["111.gif", "111.png"])
+                       ["111.webp", "111.png"])
         XCTAssertEqual(store.all().first?.isAnimated, false)
     }
 
@@ -221,7 +230,7 @@ final class EmojiDownloaderTests: XCTestCase {
     /// it. Asking for `.gif` first turns the wrong guess into a status code.
     func testAnAnimatedEmojiWronglyFlaggedStaticStillImportsAnimated() async throws {
         StubURLProtocol.handler = { request in
-            request.url?.pathExtension == "gif"
+            request.url?.pathExtension == "webp"
                 ? (200, self.temp.makeAnimatedGIFData(frameCount: 6))
                 : (200, self.pngData(width: 128))   // what Discord flattens it to
         }
@@ -244,12 +253,11 @@ final class EmojiDownloaderTests: XCTestCase {
         XCTAssertEqual(store.all().first?.isAnimated, true)
     }
 
-    func testRetriesWithPNGWhenGIFReturns415() async throws {
-        // A wrong isAnimated flag: the CDN answers 415 for a static emoji
-        // requested as .gif. Retrying self-heals it instead of reporting a
-        // puzzling failure.
+    func testRetriesWithPNGWhenTheAnimatedVariantIsRejected() async throws {
+        // The CDN rejects the animated variant for an emoji that has none.
+        // Retrying self-heals it instead of reporting a puzzling failure.
         StubURLProtocol.handler = { request in
-            request.url?.lastPathComponent == "111.gif"
+            request.url?.lastPathComponent == "111.webp"
                 ? (415, Data())
                 : (200, self.pngData(width: 128))
         }
@@ -258,7 +266,7 @@ final class EmojiDownloaderTests: XCTestCase {
 
         XCTAssertEqual(outcome.added, ["111"])
         XCTAssertEqual(StubURLProtocol.requestedURLs.map(\.lastPathComponent),
-                       ["111.gif", "111.png"])
+                       ["111.webp", "111.png"])
         XCTAssertEqual(store.all().first?.isAnimated, false,
                        "the corrected flag must be what gets stored")
     }
@@ -374,6 +382,6 @@ final class EmojiDownloaderTests: XCTestCase {
         XCTAssertEqual(url.host, "cdn.discordapp.com")
         // Host is the point of this regression guard; the extension is now
         // always `.gif` on the first attempt.
-        XCTAssertEqual(url.path, "/emojis/111.gif")
+        XCTAssertEqual(url.path, "/emojis/111.webp")
     }
 }

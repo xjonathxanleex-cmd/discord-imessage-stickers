@@ -84,6 +84,15 @@ public enum AnimatedStickerProcessor {
             ?? read(kCGImagePropertyPNGDictionary,
                     kCGImagePropertyAPNGUnclampedDelayTime,
                     kCGImagePropertyAPNGDelayTime)
+            // WebP is the format Discord now serves animated emoji in, so
+            // omitting it here would not merely lose timing — every frame
+            // would silently take `fallbackDelay`, playing the loop at a
+            // uniform 10fps regardless of what the source intended. Verified
+            // present on real Discord emoji: the WebP dictionary carries both
+            // `DelayTime` and `UnclampedDelayTime`.
+            ?? read(kCGImagePropertyWebPDictionary,
+                    kCGImagePropertyWebPUnclampedDelayTime,
+                    kCGImagePropertyWebPDelayTime)
             ?? fallbackDelay
     }
 
