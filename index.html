@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Discord Stickers — build a sticker set</title>
+<!--
+  GitHub Pages only serves from the repository root or /docs, and /docs already
+  holds this project's specs and plans. So Pages is served from the root and
+  this file forwards to the real page in /web/.
+
+  The fragment is carried across deliberately: QR codes encode a payload there,
+  and a redirect that dropped it would silently lose the entire transfer while
+  still looking like it worked.
+-->
+<script>
+  location.replace('web/index.html' + location.search + location.hash);
+</script>
+<meta http-equiv="refresh" content="0; url=web/index.html">
+</head>
+<body>
+<p>Redirecting to <a id="link" href="web/index.html">the sticker builder</a>…</p>
+<script>
+  // Keeps the fragment on the no-JS fallback link too.
+  document.getElementById('link').href = 'web/index.html' + location.hash;
+</script>
+</body>
+</html>
