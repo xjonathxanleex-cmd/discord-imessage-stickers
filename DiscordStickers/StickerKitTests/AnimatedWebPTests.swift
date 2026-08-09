@@ -74,4 +74,58 @@ final class AnimatedWebPTests: XCTestCase {
                        AnimatedStickerProcessor.totalDuration(of: source),
                        accuracy: 0.05)
     }
+
+    // MARK: - The output's frames must actually differ
+
+    /// Frame count and total duration both survive a pipeline that emits the
+    /// same picture N times — which renders as a perfectly frozen sticker that
+    /// every other assertion here calls animated.
+    ///
+    /// This is the check the earlier tests were missing: they asked how many
+    /// frames and how long, never whether the frames were different from each
+    /// other.
+    func testEncodedFramesAreNotAllIdentical() throws {
+        let output = try XCTUnwrap(
+            AnimatedStickerProcessor.normalize(
+                try fixture(), canvas: StickerLimits.animatedCanvasSize,
+                maxFrames: StickerLimits.maxAnimatedFrames, asGIF: true))
+
+        let distinct = Set(try frameFingerprints(of: output))
+        XCTAssertGreaterThan(distinct.count, 1,
+                             "every encoded frame is the same image — this is a frozen sticker")
+    }
+
+    /// Same check on the source, so a failure above cannot be blamed on the
+    /// input.
+    func testSourceFramesAreNotAllIdentical() throws {
+        let distinct = Set(try frameFingerprints(of: try fixture()))
+        XCTAssertGreaterThan(distinct.count, 1, "fixture is not really animated")
+    }
+
+    func testEncodedDelaysAreNonZero() throws {
+        let output = try XCTUnwrap(
+            AnimatedStickerProcessor.normalize(
+                try fixture(), canvas: StickerLimits.animatedCanvasSize,
+                maxFrames: StickerLimits.maxAnimatedFrames, asGIF: true))
+        XCTAssertGreaterThan(AnimatedStickerProcessor.totalDuration(of: output), 0.01,
+                             "a zero-duration loop cannot be seen to move")
+    }
+
+    /// Downscaled pixel data per frame, cheap enough to compare directly.
+    private func frameFingerprints(of data: Data) throws -> [Data] {
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(data as CFData, nil))
+        return (0..<CGImageSourceGetCount(source)).compactMap { index in
+            guard let image = CGImageSourceCreateImageAtIndex(source, index, nil)
+            else { return nil }
+            let side = 24
+            var buffer = [UInt8](repeating: 0, count: side * side * 4)
+            guard let context = CGContext(
+                data: &buffer, width: side, height: side, bitsPerComponent: 8,
+                bytesPerRow: side * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+            else { return nil }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return Data(buffer)
+        }
+    }
 }
