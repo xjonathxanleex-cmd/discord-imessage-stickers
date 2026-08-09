@@ -362,4 +362,84 @@ final class StickerStoreTests: XCTestCase {
         XCTAssertTrue(leftovers.isEmpty, "orphaned trash would grow forever")
     }
 
+
+    // MARK: - Filenames never repeat
+
+    /// iOS caches sticker assets by file URL. Files used to be `<id>.png`, so
+    /// deleting a sticker and re-importing it wrote new bytes to a path the
+    /// system had already cached — MSStickerView kept showing the old image
+    /// while sending read the new one off disk. Device-confirmed: three
+    /// animated emoji frozen in the drawer, animating in the conversation, and
+    /// fixed by a clean reinstall.
+    ///
+    /// This is the check that would have caught it.
+    func testReimportingAfterDeleteUsesADifferentPath() throws {
+        let store = try makeStore()
+        try addSticker(to: store, id: "111", name: "first")
+        let firstPath = store.fileURL(for: "111")
+
+        try store.delete(id: "111")
+        try addSticker(to: store, id: "111", name: "second")
+        let secondPath = store.fileURL(for: "111")
+
+        XCTAssertNotEqual(firstPath, secondPath,
+                          "a re-import must never reuse a cached path")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: secondPath.path))
+    }
+
+    func testEveryStickerGetsADistinctFileName() throws {
+        let store = try makeStore()
+        for id in ["a", "b", "c"] { try addSticker(to: store, id: id, name: id) }
+        let names = store.all().compactMap(\.fileName)
+        XCTAssertEqual(names.count, 3, "every entry records its filename")
+        XCTAssertEqual(Set(names).count, 3)
+    }
+
+    func testFileNameStillContainsTheIdSoFilesAreIdentifiable() throws {
+        let store = try makeStore()
+        try addSticker(to: store, id: "sha256-abcdef0123456789", name: "photo")
+        let name = try XCTUnwrap(store.all().first?.fileName)
+        XCTAssertEqual(StickerStore.id(fromFileName: name), "sha256-abcdef0123456789",
+                       "a content-hashed id contains a hyphen and must survive")
+    }
+
+    /// Entries written before `fileName` existed still live at `<id>.png`.
+    func testEntriesWithoutAFileNameFallBackToTheLegacyPath() throws {
+        let store = try makeStore()
+        let legacy = StickerEntry(id: "999", name: "old", source: .pasted,
+                                  addedAt: Date(), useCount: 0)
+        XCTAssertNil(legacy.fileName)
+        // No file is written for it; the path resolution is what is under test.
+        XCTAssertEqual(store.fileURL(for: "999").lastPathComponent, "999.png")
+    }
+
+    func testFileNameSurvivesAManifestRoundTrip() throws {
+        let root = try temporaryRoot()
+        let first = try StickerStore(root: root, writeDebounce: 0)
+        try addSticker(to: first, id: "111", name: "wave")
+        let expected = try XCTUnwrap(first.all().first?.fileName)
+        first.flush()
+
+        let second = try StickerStore(root: root, writeDebounce: 0)
+        XCTAssertEqual(second.all().first?.fileName, expected)
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: second.fileURL(for: "111").path),
+            "a reopened store must still find the file"
+        )
+    }
+
+    /// Undo has to put the file back where the entry says it is, not at the
+    /// legacy path.
+    func testUndoRestoresToTheRecordedFileName() throws {
+        let store = try makeStore()
+        try addSticker(to: store, id: "111", name: "wave")
+        let path = store.fileURL(for: "111")
+
+        try store.delete(id: "111")
+        store.undoLastDelete()
+
+        XCTAssertEqual(store.fileURL(for: "111"), path)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path.path))
+    }
+
 }

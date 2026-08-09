@@ -95,23 +95,45 @@ public final class StickerStore: @unchecked Sendable {
         }
     }
 
-    /// Hardcodes ".png" as the storage name for every sticker, animated or
-    /// not.
+    /// Separates an id from the uniquifying suffix in a stored filename.
     ///
-    /// This is **not** a format claim. `MSSticker` resolves conformance by
-    /// sniffing content, not from the path extension — see
-    /// `StickerFormatTests` — so animated stickers hold GIF bytes under a
-    /// `.png` name quite happily. An earlier version of this comment asserted
-    /// the opposite, and that belief was the whole reason the APNG-to-GIF
-    /// switch was thought to need a rename of every stored file plus a
-    /// migration for bytes already on users' phones. It needed neither.
+    /// `~` specifically: ids are Discord snowflakes (digits), 7TV ULIDs
+    /// (alphanumeric) or `sha256-<hex>`. A hyphen appears in the last of
+    /// those, so splitting on one would truncate content-hashed ids.
+    static let fileNameSeparator: Character = "~"
+
+    /// A name nothing has ever used, so a re-import can never land on a path
+    /// iOS has already cached an asset for. See `StickerEntry.fileName`.
+    static func makeFileName(for id: String) -> String {
+        "\(id)\(fileNameSeparator)\(UUID().uuidString.prefix(8)).png"
+    }
+
+    /// Recovers the id from a stored filename, for manifest-less recovery.
+    static func id(fromFileName name: String) -> String {
+        let base = (name as NSString).deletingPathExtension
+        return String(base.split(separator: fileNameSeparator,
+                                 maxSplits: 1).first ?? "")
+    }
+
+    /// The extension stays `.png` for every sticker, animated or not. That is
+    /// **not** a format claim: `MSSticker` resolves conformance by sniffing
+    /// content, not from the path extension (see `StickerFormatTests`), so
+    /// animated stickers hold GIF bytes under a `.png` name quite happily.
     ///
-    /// Keeping one extension everywhere is what makes that true. It is still
-    /// coupled by *name* to the temp file in `StickerCommitter.commit` and the
-    /// `pathExtension == "png"` filter in `rebuildFromImages` below; all three
-    /// must agree.
+    /// Entries written before `fileName` existed have none, and still live at
+    /// `<id>.png` — hence the fallback rather than a migration. Their paths
+    /// stay cache-collidable until the sticker is next re-imported, which is
+    /// the correct trade: rewriting every file on upgrade risks far more than
+    /// it fixes.
     public func fileURL(for id: String) -> URL {
-        imagesDirectory.appendingPathComponent("\(id).png")
+        queue.sync { fileURLLocked(for: id) }
+    }
+
+    /// Same resolution, for callers already holding the queue. Calling the
+    /// public one from inside a `queue.sync` block would deadlock.
+    private func fileURLLocked(for id: String) -> URL {
+        let name = entries.first { $0.id == id }?.fileName ?? "\(id).png"
+        return imagesDirectory.appendingPathComponent(name)
     }
 
     /// Favorites in the order they were favorited, oldest first, and they
@@ -139,10 +161,15 @@ public final class StickerStore: @unchecked Sendable {
                 try? FileManager.default.removeItem(at: tempURL)
                 return
             }
-            let destination = fileURL(for: entry.id)
+            // A fresh name every time, never `<id>.png`. Reusing a path iOS
+            // has cached leaves MSStickerView rendering the previous file.
+            var stored = entry
+            stored.fileName = Self.makeFileName(for: entry.id)
+            let destination = imagesDirectory
+                .appendingPathComponent(stored.fileName!)
             try? FileManager.default.removeItem(at: destination)
             try FileManager.default.moveItem(at: tempURL, to: destination)
-            entries.append(entry)
+            entries.append(stored)
             scheduleWriteLocked()
         }
     }
@@ -163,7 +190,12 @@ public final class StickerStore: @unchecked Sendable {
             // move still removes the entry: a manifest naming a file that is
             // gone is the one state this store must never be in, and losing
             // the ability to undo is far cheaper than breaking that invariant.
-            let source = fileURL(for: id)
+            // Resolved from the removed entry, not by id: the entry is
+            // already out of `entries` by this point, so a lookup would miss
+            // it and fall back to the legacy `<id>.png` — moving nothing and
+            // silently making the delete un-undoable.
+            let source = imagesDirectory
+                .appendingPathComponent(entry.fileName ?? "\(id).png")
             let trashed = trashDirectory.appendingPathComponent(source.lastPathComponent)
             try? FileManager.default.removeItem(at: trashed)
             let moved = (try? FileManager.default.moveItem(at: source, to: trashed)) != nil
@@ -188,7 +220,8 @@ public final class StickerStore: @unchecked Sendable {
             guard let deleted = undoStack.popLast() else { return nil }
 
             if let file = deleted.file {
-                let destination = fileURL(for: deleted.entry.id)
+                let destination = imagesDirectory.appendingPathComponent(
+                    deleted.entry.fileName ?? "\(deleted.entry.id).png")
                 try? FileManager.default.removeItem(at: destination)
                 // Without its image the entry would violate the manifest
                 // invariant, so a failed move means no restore at all.
@@ -338,18 +371,20 @@ public final class StickerStore: @unchecked Sendable {
             at: imagesDirectory, includingPropertiesForKeys: nil
         )) ?? []
 
-        // Hardcodes ".png": `MSSticker` resolves conformance (PNG/GIF/JPEG)
-        // from the path extension, so GIF bytes would be skipped here. APNG
-        // output legitimately keeps this extension, which is why animated
-        // output stays PNG-family for now. If animated output ever switches
-        // to GIF, this must change together with the temp file name in
-        // `StickerCommitter.commit` and `fileURL(for:)` above.
+        // Every stored sticker keeps a `.png` extension whatever its bytes
+        // are, so this filter is about the storage convention rather than the
+        // image format. The id is recovered from the part before `~`, and the
+        // filename is carried through so the rebuilt entry points at the file
+        // it was actually built from.
         return files
             .filter { $0.pathExtension == "png" }
-            .map { file in
-                let id = file.deletingPathExtension().lastPathComponent
+            .compactMap { file in
+                let name = file.lastPathComponent
+                let id = Self.id(fromFileName: name)
+                guard !id.isEmpty else { return nil }
                 return StickerEntry(id: id, name: id, source: .pasted,
-                                    addedAt: Date(), useCount: 0)
+                                    addedAt: Date(), useCount: 0,
+                                    fileName: name)
             }
     }
 }

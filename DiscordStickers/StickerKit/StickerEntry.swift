@@ -44,9 +44,26 @@ public struct StickerEntry: Codable, Equatable {
     /// decode cleanly with `isAnimated` defaulting to `false`.
     public var isAnimated: Bool
 
+    /// The sticker's filename inside the images directory.
+    ///
+    /// Exists because **iOS caches sticker assets by file URL**. Files used to
+    /// be named `<id>.png`, so deleting a sticker and re-importing it wrote
+    /// different bytes to a path the system had already cached — and
+    /// `MSStickerView` kept showing the *old* image while sending the message
+    /// read the new one off disk. Device-confirmed: three animated emoji sat
+    /// frozen in the drawer and animated correctly in the conversation, and a
+    /// clean reinstall (a fresh container, so a fresh path) fixed them.
+    ///
+    /// Every import now gets a name nothing has ever used, so a re-import can
+    /// never collide with a cached asset.
+    ///
+    /// `nil` on entries written before this existed, which still live at
+    /// `<id>.png` — see `StickerStore.fileURL(for:)`.
+    public var fileName: String?
+
     public init(id: String, name: String, source: StickerSource,
                 addedAt: Date, useCount: Int, favoritedAt: Date? = nil,
-                isAnimated: Bool = false) {
+                isAnimated: Bool = false, fileName: String? = nil) {
         self.id = id
         self.name = name
         self.source = source
@@ -54,10 +71,12 @@ public struct StickerEntry: Codable, Equatable {
         self.useCount = useCount
         self.favoritedAt = favoritedAt
         self.isAnimated = isAnimated
+        self.fileName = fileName
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, source, addedAt, useCount, favoritedAt, isAnimated
+        case fileName
     }
 
     public init(from decoder: any Decoder) throws {
@@ -69,6 +88,7 @@ public struct StickerEntry: Codable, Equatable {
         useCount = try container.decode(Int.self, forKey: .useCount)
         favoritedAt = try container.decodeIfPresent(Date.self, forKey: .favoritedAt)
         isAnimated = try container.decodeIfPresent(Bool.self, forKey: .isAnimated) ?? false
+        fileName = try container.decodeIfPresent(String.self, forKey: .fileName)
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -82,5 +102,6 @@ public struct StickerEntry: Codable, Equatable {
         if isAnimated {
             try container.encode(isAnimated, forKey: .isAnimated)
         }
+        try container.encodeIfPresent(fileName, forKey: .fileName)
     }
 }
