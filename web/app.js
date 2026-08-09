@@ -126,7 +126,10 @@
     // Same wording as the app's, deliberately: someone who hits this on the
     // page and then again on the phone should recognise one message, not
     // wonder whether they are two different problems.
-    if (this.value.trim() && !records.length) {
+    if (DSTK.parse.looksLikePayload(this.value)) {
+      msg.className = 'bad';
+      msg.textContent = PAYLOAD_NOTE;
+    } else if (this.value.trim() && !records.length) {
       msg.className = 'bad';
       msg.textContent = 'No Discord emoji found in that text.';
     } else { msg.className = 'muted'; msg.textContent = ''; }
@@ -136,6 +139,11 @@
     var r = DSTK.parse.rawLines(this.value);
     merge(r.records);
     var msg = $('msg-raw');
+    if (DSTK.parse.looksLikePayload(this.value)) {
+      msg.className = 'bad';
+      msg.textContent = PAYLOAD_NOTE;
+      return;
+    }
     // Rejections are shown, never swallowed: a user who pastes 40 lines and
     // gets 38 emoji needs to know which two failed and why.
     //
@@ -153,8 +161,17 @@
     } else { msg.className = 'muted'; msg.textContent = ''; }
   });
 
+  /// Shown by every input when it is handed this page's own output.
+  var PAYLOAD_NOTE = 'That is a DSTK1 payload — this page creates those. '
+    + 'Paste it into the app on your phone instead.';
+
   $('btn-7tv').addEventListener('click', function () {
     var msg = $('msg-7tv');
+    if (DSTK.parse.looksLikePayload($('in-7tv').value)) {
+      msg.className = 'bad';
+      msg.textContent = PAYLOAD_NOTE;
+      return;
+    }
     var setId = DSTK.sevenTV.setIdFrom($('in-7tv').value);
     if (!setId) {
       msg.className = 'bad';

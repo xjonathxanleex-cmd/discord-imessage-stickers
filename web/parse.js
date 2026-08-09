@@ -83,5 +83,21 @@ DSTK.parse = (function () {
     return { records: records, rejected: rejected };
   }
 
-  return { discordMarkup: discordMarkup, rawLines: rawLines };
+  // A DSTK1 payload is this page's *output*. Pasting one back in is an easy
+  // mistake -- it looks like the kind of text the page eats -- and every input
+  // here would otherwise reject it with a message about the wrong thing
+  // entirely ("No 7TV emote set with that id").
+  //
+  // Matches a header at the start even when newlines have been flattened to
+  // spaces, which is what happens when a payload is pasted into a
+  // single-line field.
+  function looksLikePayload(text) {
+    return /^\s*DSTK1(\s|$)/.test(String(text || ''));
+  }
+
+  return {
+    discordMarkup: discordMarkup,
+    rawLines: rawLines,
+    looksLikePayload: looksLikePayload
+  };
 })();

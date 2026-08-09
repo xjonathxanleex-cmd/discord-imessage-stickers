@@ -337,6 +337,31 @@ test('chunk: the 500-emoji cap is enforced', function () {
   assertEqual(lines, 500, 'capped at maxPayloadEmoji');
 });
 
+
+test('looksLikePayload: recognises a payload with newlines', function () {
+  assertEqual(DSTK.parse.looksLikePayload('DSTK1\nd 111 a'), true);
+});
+
+test('looksLikePayload: recognises one flattened into a single line', function () {
+  // What a single-line input does to a pasted payload -- and the shape the
+  // 7TV field actually received when this was reported.
+  assertEqual(DSTK.parse.looksLikePayload('DSTK1 7a 01FCY771D800007PQ2DF3GDTN6 RainTime'), true);
+});
+
+test('looksLikePayload: leading whitespace still counts', function () {
+  assertEqual(DSTK.parse.looksLikePayload('  \n DSTK1\nd 1 a'), true);
+});
+
+test('looksLikePayload: ordinary input is not a payload', function () {
+  assertEqual(DSTK.parse.looksLikePayload('global'), false);
+  assertEqual(DSTK.parse.looksLikePayload('<:x:1>'), false);
+  assertEqual(DSTK.parse.looksLikePayload(''), false);
+});
+
+test('looksLikePayload: a word merely starting with DSTK1 is not a payload', function () {
+  assertEqual(DSTK.parse.looksLikePayload('DSTK1234'), false);
+});
+
 // --- shared corpus ----------------------------------------------------------
 // Runs the shared corpus through the page's parser. Needs fetch, which file://
 // blocks -- see README for the one-line server. Skips loudly rather than
