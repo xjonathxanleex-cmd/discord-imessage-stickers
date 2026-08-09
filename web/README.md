@@ -16,6 +16,22 @@ Three inputs, all optional and combinable:
 Pick what you want, rename anything inline, then copy the payload or scan the QR
 codes with your phone.
 
+### How the QR codes work
+
+They carry a **link back to this page**, not the payload itself. iOS Camera
+cannot hand plain text to an app — it treats anything non-URL as a web search —
+so scanning a raw payload lands you in Google looking at gibberish.
+
+Scanning instead opens this page on the phone with the payload in the URL
+fragment, and the page offers a Copy button. Fragments are never sent to the
+server by any browser, so a scanned payload stays between the two devices
+exactly as copied text does.
+
+A set too large for one code splits across several, each labelled *1 of 3*.
+Scan and copy them one at a time; the app dedupes, so order and repeats are
+harmless. QR codes only appear when the page is served over http(s) — opened
+from disk it has no address worth encoding.
+
 ## Tests
 
 Two runners over the same `test.js`:

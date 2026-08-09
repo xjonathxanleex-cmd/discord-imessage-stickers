@@ -362,6 +362,95 @@ test('looksLikePayload: a word merely starting with DSTK1 is not a payload', fun
   assertEqual(DSTK.parse.looksLikePayload('DSTK1234'), false);
 });
 
+
+// --- QR transfer by URL -----------------------------------------------------
+
+var PAGE = 'https://example.github.io/discord-imessage-stickers/';
+
+test('encodeForURL round-trips a payload exactly', function () {
+  var payload = 'DSTK1\nd 111 cat jam\n7a 01FCY771D800007PQ2DF3GDTN6 RainTime';
+  assertEqual(DSTK.payload.decodeFromURL(DSTK.payload.encodeForURL(payload)), payload);
+});
+
+test('encodeForURL survives non-ASCII names', function () {
+  var payload = 'DSTK1\nd 111 🎉 café';
+  assertEqual(DSTK.payload.decodeFromURL(DSTK.payload.encodeForURL(payload)), payload);
+});
+
+test('encodeForURL output needs no percent-escaping', function () {
+  var encoded = DSTK.payload.encodeForURL('DSTK1\nd 111 a name with spaces');
+  assertEqual(/^[A-Za-z0-9_-]*$/.test(encoded), true, 'got: ' + encoded);
+  assertEqual(encodeURIComponent(encoded), encoded, 'must be URL-safe as-is');
+});
+
+test('payloadBudget leaves room for the URL and base64 expansion', function () {
+  var budget = DSTK.payload.payloadBudget(PAGE);
+  assertEqual(budget > 0, true);
+  // base64 of a full budget, plus the URL, must still fit the QR budget.
+  var encoded = DSTK.payload.encodeForURL(new Array(budget + 1).join('x'));
+  assertEqual(DSTK.payload.byteLength(PAGE + '#' + encoded)
+              <= DSTK.payload.MAX_CHUNK_BYTES, true);
+});
+
+test('chunkForURL: every URL fits the QR byte budget', function () {
+  var recs = [];
+  for (var i = 0; i < 200; i++) {
+    recs.push({ id: '01FCY771D800007PQ2DF3GDT' + i, name: 'emote' + i,
+                source: '7', animated: true });
+  }
+  DSTK.payload.chunkForURL(recs, PAGE).forEach(function (url) {
+    assertEqual(DSTK.payload.byteLength(url) <= DSTK.payload.MAX_CHUNK_BYTES, true,
+                'url of ' + DSTK.payload.byteLength(url) + ' bytes');
+  });
+});
+
+test('chunkForURL: every URL encodes as a real QR', function () {
+  var recs = [];
+  for (var i = 0; i < 200; i++) {
+    recs.push({ id: '01FCY771D800007PQ2DF3GDT' + i, name: 'emote' + i,
+                source: '7', animated: true });
+  }
+  DSTK.payload.chunkForURL(recs, PAGE).forEach(function (url, i) {
+    var q = qrcode(0, DSTK.payload.QR_EC);
+    q.addData(url, 'Byte');
+    q.make();                       // throws if it does not fit
+    assertEqual(q.getModuleCount() > 0, true, 'chunk ' + i);
+  });
+});
+
+test('chunkForURL: the chunks reassemble to the whole selection', function () {
+  var recs = [];
+  for (var i = 0; i < 150; i++) {
+    recs.push({ id: '1481800758532903' + i, name: 'n' + i, source: 'd', animated: false });
+  }
+  var ids = [];
+  DSTK.payload.chunkForURL(recs, PAGE).forEach(function (url) {
+    var text = DSTK.payload.decodeFromURL(url.split('#')[1]);
+    assertEqual(text.indexOf('DSTK1\n'), 0, 'each chunk is a whole payload');
+    text.split('\n').slice(1).forEach(function (line) { ids.push(line.split(' ')[1]); });
+  });
+  assertDeepEqual(ids, recs.map(function (r) { return r.id; }));
+});
+
+test('chunkForURL: a longer page URL means more chunks, not overflow', function () {
+  var recs = [];
+  for (var i = 0; i < 120; i++) {
+    recs.push({ id: '1481800758532903' + i, name: 'n' + i, source: 'd', animated: false });
+  }
+  var shortBase = DSTK.payload.chunkForURL(recs, 'https://a.io/').length;
+  var longBase = DSTK.payload.chunkForURL(
+    recs, 'https://a-very-long-user-name.github.io/a-very-long-repository-name/').length;
+  assertEqual(longBase >= shortBase, true,
+              'a longer prefix eats payload budget (' + shortBase + ' vs ' + longBase + ')');
+});
+
+test('chunkForURL: MAX_CHUNK_BYTES is restored afterwards', function () {
+  var before = DSTK.payload.MAX_CHUNK_BYTES;
+  DSTK.payload.chunkForURL([{ id: '1', name: 'a', source: 'd', animated: false }], PAGE);
+  assertEqual(DSTK.payload.MAX_CHUNK_BYTES, before,
+              'the temporary budget swap must not leak');
+});
+
 // --- shared corpus ----------------------------------------------------------
 // Runs the shared corpus through the page's parser. Needs fetch, which file://
 // blocks -- see README for the one-line server. Skips loudly rather than

@@ -23,6 +23,10 @@ const summary = stub(), results = stub();
 
 const sandbox = {
   TextEncoder,
+  TextDecoder,
+  // base64 for the QR URL encoding; the browser has these natively.
+  btoa: (b) => Buffer.from(b, 'binary').toString('base64'),
+  atob: (b) => Buffer.from(b, 'base64').toString('binary'),
   console,
   document: {
     getElementById: (id) => (id === 'summary' ? summary : results),

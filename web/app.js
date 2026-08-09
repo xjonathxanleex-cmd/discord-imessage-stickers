@@ -81,7 +81,17 @@
     }
 
     $('btn-copy').disabled = false;
-    var chunks = DSTK.payload.chunk(sel);
+
+    // QR codes carry a URL back to this page, not the payload itself — iOS
+    // Camera cannot hand plain text to an app and searches the web for it
+    // instead. Only meaningful once the page has a real address: opened from
+    // disk its own URL is a file:// path, useless on a phone.
+    var pageURL = location.protocol === 'http:' || location.protocol === 'https:'
+      ? location.origin + location.pathname
+      : null;
+    var chunks = pageURL
+      ? DSTK.payload.chunkForURL(sel, pageURL)
+      : [];
     var text = DSTK.payload.build(sel);
     $('out').value = text;
 
@@ -94,6 +104,15 @@
 
     var qrs = $('qrs');
     qrs.textContent = '';
+
+    if (!pageURL) {
+      var note = document.createElement('div');
+      note.className = 'muted';
+      note.textContent = 'QR codes need the published page — copy the text above instead.';
+      qrs.appendChild(note);
+      return;
+    }
+
     chunks.forEach(function (c, i) {
       var wrap = document.createElement('div');
       wrap.className = 'qr';
@@ -223,5 +242,49 @@
     }
   });
 
+  /// A phone that scanned a QR lands here with the payload in the fragment.
+  /// It is shown for copying rather than imported into the picker: the person
+  /// holding this phone wants it on the clipboard and gone, not a grid to
+  /// curate on a 6-inch screen.
+  ///
+  /// The fragment never reaches the server, so a scanned payload stays between
+  /// the two devices exactly as the copied text does.
+  function showScannedPayload() {
+    if (location.hash.length < 2) return false;
+    var text;
+    try { text = DSTK.payload.decodeFromURL(location.hash.slice(1)); }
+    catch (e) { return false; }
+    if (!/^DSTK1(\s|$)/.test(text)) return false;
+
+    var count = text.split('\n').length - 1;
+    $('scanned-count').textContent =
+      count + (count === 1 ? ' emoji ready' : ' emoji ready');
+    $('scanned-text').value = text;
+    $('scanned').hidden = false;
+    $('scanned').scrollIntoView();
+    return true;
+  }
+
+  $('btn-scanned-copy').addEventListener('click', function () {
+    var text = $('scanned-text').value;
+    var done = function () {
+      $('msg-scanned').textContent = 'Copied — open the app and tap Paste Emoji.';
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () {
+        $('scanned-text').select(); document.execCommand('copy'); done();
+      });
+    } else {
+      $('scanned-text').select(); document.execCommand('copy'); done();
+    }
+  });
+
+  // A fragment-only navigation does not reload the page, so a fresh load is
+  // not enough. Scanning *chunk 2 of 3* while the browser still has this page
+  // open changes only the fragment — without this the panel would keep showing
+  // chunk 1 and the rest of the set would be silently unreachable.
+  window.addEventListener('hashchange', showScannedPayload);
+
+  showScannedPayload();
   render();
 })();

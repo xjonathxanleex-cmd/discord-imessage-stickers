@@ -32,6 +32,7 @@
   .cell img { width:32px; height:32px; object-fit:contain; flex:none; }
   .cell input[type=text] { border:none; padding:.2rem; font-size:.85rem; min-width:0; }
   .cell input[type=text]:focus { outline:1px solid var(--accent); border-radius:3px; }
+  #scanned textarea { width:100%; font-family:ui-monospace, monospace; font-size:.8rem; }
   #out { width:100%; min-height:8rem; font-family:ui-monospace, monospace; font-size:.8rem;
          margin-top:.5rem; }
   #qrs { display:flex; gap:1rem; flex-wrap:wrap; margin-top:1rem; }
@@ -43,6 +44,17 @@
 </style>
 </head>
 <body>
+<section id="scanned" hidden>
+  <h2 style="margin-top:0">Scanned <span id="scanned-count" class="muted"></span></h2>
+  <div class="row">
+    <button id="btn-scanned-copy" class="primary">Copy</button>
+    <span id="msg-scanned" class="muted"></span>
+  </div>
+  <textarea id="scanned-text" readonly rows="4"></textarea>
+  <p class="muted">Open Messages, expand the sticker drawer, and tap <b>Paste Emoji</b>.</p>
+  <hr style="border:none;border-top:1px solid var(--line);margin:2rem 0">
+</section>
+
 <h1>Build a sticker set</h1>
 <p class="sub">Gather emoji here, then send the result to your phone. Nothing is uploaded or
 stored — this page only handles names and links, and your phone fetches the images itself.</p>
