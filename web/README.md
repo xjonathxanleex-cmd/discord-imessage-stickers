@@ -5,7 +5,11 @@ iPhone app to import.
 
 ## Use it
 
-Open `index.html` in a browser. That's it — no build, no server, no install.
+**Live:** <https://xjonathxanleex-cmd.github.io/discord-imessage-stickers/>
+
+Or open `index.html` from disk — no build, no server, no install. QR codes only
+appear on the hosted version, since a `file://` path is not an address a phone
+can reach.
 
 Three inputs, all optional and combinable:
 
@@ -78,9 +82,10 @@ Counting would overflow a QR on 7TV-heavy sets. There is a test named
 
 ## Publishing
 
-GitHub → repo Settings → Pages → Source: `main`, folder `/web`. The page is
-static with no build step, so it deploys as-is at
-`https://<user>.github.io/<repo>/`.
+Already published. Pages serves the repository **root** on `main` — it accepts
+only `/` or `/docs`, and `/docs` holds this project's specs — so the root
+`index.html` forwards to `web/index.html`, carrying any URL fragment with it.
+Dropping the fragment there would silently lose a scanned payload while still
+looking like it worked.
 
-The repo is private; Pages on a private repo needs a paid plan, so make it public
-first — the page contains no secrets and stores nothing.
+Nothing to build or deploy: a push to `main` is live within a minute.
