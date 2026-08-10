@@ -84,8 +84,8 @@ public final class StickerGridViewController: UIViewController {
         // impossible from this tab: the Favorites grid is empty precisely
         // when this label is showing, so "star any sticker" needs an
         // explicit "switch tabs first" step or there is nothing to star.
-        emptyLabel.text = "No favorites yet. Open the All tab, "
-            + "tap Edit, then tap the star on any sticker."
+        // Text is chosen per tab in `reload()`; this is just the initial value.
+        emptyLabel.text = Self.favoritesEmptyText
         emptyLabel.font = .preferredFont(forTextStyle: .footnote)
         emptyLabel.textColor = .secondaryLabel
         emptyLabel.textAlignment = .center
@@ -105,6 +105,15 @@ public final class StickerGridViewController: UIViewController {
         reload()
     }
 
+    static let favoritesEmptyText =
+        "No favorites yet. Open the All tab, tap Edit, "
+        + "then tap the star on any sticker."
+
+    static let firstRunText =
+        "No stickers yet.\n\nCopy emoji from Discord, then tap Paste Emoji "
+        + "above.\n\nOr build a whole set on a computer at\n"
+        + CompanionPage.displayText
+
     public func reload() {
         switch filter {
         case .favorites: entries = store.favorites()
@@ -112,7 +121,24 @@ public final class StickerGridViewController: UIViewController {
         case .all:       entries = store.all()
         case .search(let query): entries = store.search(query)
         }
-        emptyLabel.isHidden = !(entries.isEmpty && filter == .favorites)
+        // A first-run user used to see a completely blank grid: the empty
+        // state only covered the Favorites tab, so the one moment someone most
+        // needs to be told what to do showed them nothing at all. It is also
+        // the least intrusive place to mention the companion page — no button
+        // in an already-crowded drawer, and it disappears the moment there is
+        // a single sticker.
+        switch filter {
+        case .favorites:
+            emptyLabel.text = Self.favoritesEmptyText
+            emptyLabel.isHidden = !entries.isEmpty
+        case .all, .recents:
+            emptyLabel.text = Self.firstRunText
+            emptyLabel.isHidden = !entries.isEmpty
+        case .search:
+            // A search with no matches is self-explanatory, and offering
+            // first-run advice to someone with 300 stickers reads as a bug.
+            emptyLabel.isHidden = true
+        }
         collectionView?.reloadData()
     }
 }
